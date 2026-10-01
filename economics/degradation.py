@@ -88,9 +88,10 @@ def estimate_bess_degradation(
 ) -> DegradationResult:
     curve = cycle_life_curve or DEFAULT_CYCLE_LIFE_CURVE
 
-    source_id = db_manager.get_source(source_name)
-    if source_id is None:
+    source_row = db_manager.get_source(source_name=source_name)
+    if source_row is None:
         raise ValueError(f"No such BESS source logged: {source_name!r}")
+    source_id = source_row["source_id"]
 
     charge_metric_id = db_manager.get_metric_id("bess_charge")
     discharge_metric_id = db_manager.get_metric_id("bess_discharge")
