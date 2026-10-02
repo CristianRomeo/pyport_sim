@@ -33,7 +33,8 @@ specific / quoted value should replace them.
 from .metrics import ECONOMIC_METRICS, register_economic_metrics
 from .capex_opex import lcos, annual_cost
 from .tariff_seasonal import get_seasonal_tariff_path, EEM_PERIODS
-from .degradation import estimate_bess_degradation
+from .degradation import estimate_bess_degradation 
+from .payback import evaluate_investment
 
 __all__ = [
     "ECONOMIC_METRICS",
@@ -43,4 +44,5 @@ __all__ = [
     "get_seasonal_tariff_path",
     "EEM_PERIODS",
     "estimate_bess_degradation",
+    "evaluate_investment"
 ]
