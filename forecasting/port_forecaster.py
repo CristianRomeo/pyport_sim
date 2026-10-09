@@ -36,7 +36,7 @@ class PortForecaster:
         port: Port,
         db_manager: DatabaseManager,
         timestep_seconds: int = 900,
-        trip_schedule: tuple = ((9, 0), (14, 1)),
+        trip_schedule: tuple = ((9, 0), (13, 1), (17, 2)),
     ):
         """
         Initialize the forecaster for a port.
