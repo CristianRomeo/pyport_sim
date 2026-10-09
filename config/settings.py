@@ -32,7 +32,7 @@ class Settings:
     db_path: str = "port_simulation.db"
     use_optimizer: bool = False
     power_limit_mode: bool = False
-    trip_schedule: tuple = ((9, 0), (14, 1))
+    trip_schedule: tuple = ((9, 0), (13, 1), (17, 2))
 
     def __post_init__(self):
         """Validate settings; raises ValueError if timestep is not positive."""
