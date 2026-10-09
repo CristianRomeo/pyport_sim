@@ -47,7 +47,7 @@ class BaseOptimizer:
         db_manager: DatabaseManager,
         timestep_seconds: int = 900,
         boat_charger_assignments: Dict[str, int] = None,
-        trip_schedule: tuple = ((9, 0), (14, 1)),
+        trip_schedule: tuple = ((9, 0), (13, 1), (17, 2)),
         max_slack_timesteps: int = 8,
         deadline_decay_factor: float = 0.5,
         bess_end_soc_penalty: float = 0.5,
