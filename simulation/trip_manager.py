@@ -1,9 +1,11 @@
 """Trip management for the simulation."""
 
 import random
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import holidays
 
 from models.trip import Trip
 
@@ -13,8 +15,23 @@ class TripManager:
     Manage trip loading and daily trip assignments for boats.
 
     Loads route CSV files once and then assigns trips per boat and day based on
-    weekday rules, exposing helpers to query trips by slot or date.
+    a recreational-marina usage pattern (season + public holidays), exposing
+    helpers to query trips by slot or date.
     """
+
+    # Recreational boat usage in Madeira does not follow a Monday-Friday
+    # commercial pattern (the previous version of this file did: 2 trips on
+    # weekdays, 1 on Saturday, 0 on Sunday). Instead it is driven mainly by
+    # season and by public/regional holidays, which fall on any weekday.
+    #
+    # TODO: HIGH_SEASON_MONTHS, TRIPS_HIGH_SEASON and TRIPS_LOW_SEASON are
+    # provisional, based on an informal check with a Funchal boat rental
+    # company (~3 trips/day currently in high season; "probabilmente 2
+    # in inverno, ma non sono sicuro" - Cristian, 09 Oct 2026). Replace with
+    # real operator data once the pending marina email responses arrive.
+    HIGH_SEASON_MONTHS = frozenset({5, 6, 7, 8, 9, 10})  # May-October
+    TRIPS_HIGH_SEASON = 3
+    TRIPS_LOW_SEASON = 2
 
     def __init__(self, trips_directory: str = "assets/trips"):
         """
@@ -27,6 +44,15 @@ class TripManager:
         self.available_trips: List[Trip] = []
         self._load_trips()
         self.daily_assignments: Dict[str, Dict[str, List[Trip]]] = {}
+        # Portugal national holidays + Madeira regional holidays (subdiv "30"),
+        # e.g. "Dia da Regiao Autonoma da Madeira" (1 July).
+        self._holidays = holidays.Portugal(subdiv="30")
+        # "Dia da Autonomia" (2 April) - Madeira regional holiday instituted by
+        # unanimous vote of the Madeira Legislative Assembly on 27 Nov 2024.
+        # Verified against observador.pt (27/11/2024); not yet present in the
+        # holidays library's data as of v0.106, so it is added here manually.
+        for year in range(2025, 2036):
+            self._holidays[date(year, 4, 2)] = "Dia da Autonomia"
 
     def _load_trips(self):
         """
@@ -57,6 +83,20 @@ class TripManager:
         else:
             print("  Warning: No trips loaded!")
 
+    def _num_trips_for_date(self, current_date: datetime) -> int:
+        """
+        Number of trips for a given calendar day: TRIPS_HIGH_SEASON if the
+        date falls in a high-season month OR is a Portugal/Madeira public
+        holiday, otherwise TRIPS_LOW_SEASON. Unlike the previous weekday-based
+        rule, no day of the week is ever zeroed out.
+        """
+        date_only = current_date.date()
+        is_high_season = date_only.month in self.HIGH_SEASON_MONTHS
+        is_holiday = date_only in self._holidays
+        if is_high_season or is_holiday:
+            return self.TRIPS_HIGH_SEASON
+        return self.TRIPS_LOW_SEASON
+
     def assign_daily_trips(self, boat_name: str, current_date: datetime) -> List[Trip]:
         """
         Assign trips for a boat for the given day if not already assigned.
@@ -72,18 +112,12 @@ class TripManager:
             return []
 
         date_str = current_date.strftime("%Y-%m-%d")
-        weekday = current_date.weekday()
 
         if boat_name in self.daily_assignments:
             if date_str in self.daily_assignments[boat_name]:
                 return self.daily_assignments[boat_name][date_str]
 
-        if weekday < 5:
-            num_trips = 2
-        elif weekday == 5:
-            num_trips = 1
-        else:
-            num_trips = 0
+        num_trips = self._num_trips_for_date(current_date)
 
         assigned_trips = []
         if num_trips > 0:
