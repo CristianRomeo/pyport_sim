@@ -5,8 +5,7 @@ KPIs, without touching the simulation itself.
 Typical use: run PyPort as usual (main.py or your own scenario script) to
 produce a .db file, then run this against it:
 
-    python -m economics.run_economics --db path/to/run.db \\
-        --grid-source Funchal --tariff-json economics/tariff_profiles/tariff_period_III.json
+    python -m economics.run_economics --db <file.db> --grid-source Funchal --tariff-json assets/tariff/default_tariff.json
 
 This is a first working skeleton: it computes grid energy cost per
 timestep for one scenario run, and writes the results back into the SAME
