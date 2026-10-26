@@ -110,8 +110,8 @@ class SimulationEngine:
                 db_manager,
                 settings.timestep,
                 self.boat_charger_assignments,
+                trip_schedule=settings.trip_schedule,
             )
-
             print(
                 f"   Pre-assignments: {', '.join(f'{b} → {self.port.chargers[c].name}' for b, c in self.boat_charger_assignments.items())}"
             )

@@ -136,28 +136,16 @@ class PortForecaster:
             for hour, _ in self.trip_schedule
         ]
 
-    def _next_departure_trip(
-        self, timestamp: datetime, trips: List[Trip]
-    ) -> Optional[Trip]:
+    def _next_departure_trip(self, timestamp: datetime, trips: List[Trip]) -> Optional[Trip]:
         """Return the next trip (by departure time) after timestamp, or None if none left."""
         if not trips:
             return None
         start_times = self._departure_times(timestamp)
-
-        if len(trips) >= 1 and timestamp < start_times[0]:
-            return trips[0]
-        if len(trips) >= 2:
-            dur0 = trips[0].duration
-            t_trip0_end = start_times[0] + timedelta(seconds=dur0)
-            if t_trip0_end <= timestamp < start_times[1]:
-                return trips[1]
-            if timestamp >= start_times[1]:
-                return None
-        else:
-            dur0 = trips[0].duration
-            t_trip0_end = start_times[0] + timedelta(seconds=dur0)
-            if timestamp >= t_trip0_end:
-                return None
+        for i, trip in enumerate(trips):
+            if i >= len(start_times):
+                break
+            if timestamp < start_times[i]:
+                return trip
         return None
 
     def _forecast_boat_available(
