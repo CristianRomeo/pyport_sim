@@ -93,3 +93,48 @@ def test_evaluate_investment_unprofitable_case_has_infinite_payback():
     assert result.simple_payback_years == float("inf")
     assert result.discounted_payback_years == float("inf")
     assert result.npv_eur < 0
+
+# ---- battery replacement ----------------------------------------------------
+
+from economics.payback import bess_replacement_schedule
+
+
+def test_replacement_schedule_one_replacement_in_horizon():
+    assert bess_replacement_schedule(100_000, life_years=10, horizon_years=20) == {10: 100_000}
+
+
+def test_replacement_schedule_two_replacements():
+    schedule = bess_replacement_schedule(100_000, life_years=8, horizon_years=20)
+    assert sorted(schedule) == [8, 16]
+
+
+def test_replacement_schedule_rounds_life_up():
+    assert sorted(bess_replacement_schedule(1000, life_years=8.2, horizon_years=20)) == [9, 17]
+
+
+def test_replacement_schedule_price_decline():
+    schedule = bess_replacement_schedule(100_000, 10, 20, annual_price_decline=0.1)
+    assert schedule[10] == pytest.approx(100_000 * 0.9 ** 10)
+
+
+def test_replacement_schedule_disabled_when_life_is_zero():
+    assert bess_replacement_schedule(100_000, life_years=0, horizon_years=20) == {}
+
+
+def test_npv_with_replacement_zero_discount():
+    result = npv(1000, 100, 0.0, 20, replacements={10: 300})
+    assert result == pytest.approx(20 * 100 - 1000 - 300)
+
+
+def test_npv_ignores_replacement_outside_horizon():
+    base = npv(1000, 100, 0.07, 20)
+    assert npv(1000, 100, 0.07, 20, replacements={25: 5000}) == pytest.approx(base)
+
+
+def test_evaluate_investment_with_replacement_lowers_npv():
+    plain = evaluate_investment(50000, 35.49, 1500, 0.07, 20)
+    with_repl = evaluate_investment(50000, 35.49, 1500, 0.07, 20, bess_replacements={10: 20000})
+    assert with_repl.npv_eur == pytest.approx(plain.npv_eur - 20000 / 1.07 ** 10)
+    assert with_repl.replacement_cost_pv_eur == pytest.approx(20000 / 1.07 ** 10)
+    assert with_repl.simple_payback_years == pytest.approx(plain.simple_payback_years)
+    assert with_repl.discounted_payback_years >= plain.discounted_payback_years

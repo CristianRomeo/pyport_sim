@@ -16,8 +16,9 @@ DatabaseManager, so it is trivial to unit test and to reuse from a future
 Streamlit "what-if" dashboard.
 """
 
+import math
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 def annualize_daily_value(daily_value: float, days_per_year: int = 365) -> float:
@@ -56,21 +57,79 @@ def simple_payback_years(
     return capex_eur / annual_net_savings_eur
 
 
+def bess_replacement_schedule(
+    bess_capex_eur: float,
+    life_years: float,
+    horizon_years: int,
+    annual_price_decline: float = 0.0,
+) -> Dict[int, float]:
+    """
+    Battery replacement costs that fall inside the analysis horizon.
+
+    The battery is replaced at the end of year ceil(k * life_years) for
+    k = 1, 2, ... as long as that year is strictly before the end of the
+    horizon (a battery that dies in the last year is not replaced).
+
+    Args:
+        bess_capex_eur: Cost of the battery today (EUR), e.g.
+            bess_kwh * bess_eur_per_kwh.
+        life_years: Years before the battery must be replaced (e.g. the
+            time to reach 80% health, from degradation.py). 0 or less
+            means "no replacement modelled" and returns {}.
+        horizon_years: Length of the analysis (years).
+        annual_price_decline: Yearly fall of the battery price (0.03 = 3%).
+            The cost in year y is bess_capex_eur * (1 - decline) ** y.
+
+    Returns:
+        {year: replacement cost in EUR}, empty if none falls in the horizon.
+    """
+    if life_years <= 0:
+        return {}
+    schedule: Dict[int, float] = {}
+    k = 1
+    while True:
+        year = math.ceil(k * life_years)
+        if year >= horizon_years:
+            break
+        schedule[year] = bess_capex_eur * (1.0 - annual_price_decline) ** year
+        k += 1
+    return schedule
+
+
+def _replacement_pv(
+    replacements: Optional[Dict[int, float]],
+    discount_rate: float,
+    years: int,
+) -> float:
+    """Present value (EUR) of the replacement costs paid within `years`."""
+    if not replacements:
+        return 0.0
+    return sum(
+        cost / (1 + discount_rate) ** year
+        for year, cost in replacements.items()
+        if 1 <= year <= years
+    )
+
+
 def npv(
     capex_eur: float,
     annual_net_cashflow_eur: float,
     discount_rate: float,
     years: int,
+    replacements: Optional[Dict[int, float]] = None,
 ) -> float:
     """
     Net Present Value of the investment over a fixed horizon, assuming a
-    constant annual net cash flow (savings - OPEX) every year.
+    constant annual net cash flow (savings - OPEX) every year, minus any
+    one-off replacement costs (e.g. a new battery).
 
     Args:
         capex_eur: Upfront investment (EUR), paid at year 0.
         annual_net_cashflow_eur: Constant annual savings minus OPEX (EUR/year).
         discount_rate: i, e.g. 0.07 for 7% (same convention as capex_opex.lcos).
         years: Investment horizon / asset lifetime (years).
+        replacements: Optional {year: cost in EUR} paid at the end of that
+            year (see bess_replacement_schedule). None means no replacement.
 
     Returns:
         NPV in EUR. Positive means the investment is worthwhile over that
@@ -80,7 +139,7 @@ def npv(
         annual_net_cashflow_eur / (1 + discount_rate) ** t
         for t in range(1, years + 1)
     )
-    return discounted - capex_eur
+    return discounted - capex_eur - _replacement_pv(replacements, discount_rate, years)
 
 
 def discounted_payback_years(
@@ -88,17 +147,20 @@ def discounted_payback_years(
     annual_net_cashflow_eur: float,
     discount_rate: float,
     max_years: int = 30,
+    replacements: Optional[Dict[int, float]] = None,
 ) -> float:
     """
     Discounted payback period: the year in which cumulative discounted cash
     flows first cover the CAPEX, linearly interpolated within that year for
-    a fractional result.
+    a fractional result. Replacement costs (if any) are subtracted in the
+    year they are paid.
 
     Args:
         capex_eur: Upfront investment (EUR).
         annual_net_cashflow_eur: Constant annual savings minus OPEX (EUR/year).
         discount_rate: i, e.g. 0.07 for 7%.
         max_years: Stop searching after this many years (default 30).
+        replacements: Optional {year: cost in EUR}, as in npv().
 
     Returns:
         Years to recover the CAPEX on a discounted basis, or float("inf") if
@@ -111,9 +173,11 @@ def discounted_payback_years(
     cumulative = -capex_eur
     for t in range(1, max_years + 1):
         discounted_cf = annual_net_cashflow_eur / (1 + discount_rate) ** t
+        if replacements and t in replacements:
+            discounted_cf -= replacements[t] / (1 + discount_rate) ** t
         previous_cumulative = cumulative
         cumulative += discounted_cf
-        if cumulative >= 0:
+        if cumulative >= 0 and discounted_cf > 0:
             # Linearly interpolate within year t for a fractional year.
             fraction = -previous_cumulative / discounted_cf
             return (t - 1) + fraction
@@ -134,6 +198,7 @@ class PaybackResult:
     npv_eur: float
     discount_rate: float
     horizon_years: int
+    replacement_cost_pv_eur: float = 0.0  # present value of replacements inside the horizon
 
 
 def evaluate_investment(
@@ -143,6 +208,7 @@ def evaluate_investment(
     discount_rate: float = 0.07,
     horizon_years: int = 20,
     days_per_year: int = 365,
+    bess_replacements: Optional[Dict[int, float]] = None,
 ) -> PaybackResult:
     """
     One-call convenience wrapper: turn a daily operational saving plus a
@@ -156,6 +222,9 @@ def evaluate_investment(
         discount_rate: i, e.g. 0.07 for 7% (ECO-01: indicative 6-8%).
         horizon_years: Investment horizon / asset lifetime for NPV (years).
         days_per_year: Operating days per year (365 by default).
+        bess_replacements: Optional {year: cost} of battery replacements,
+            e.g. from bess_replacement_schedule(). Affects NPV and
+            discounted payback; the simple payback ignores it by definition.
 
     Returns:
         A PaybackResult with simple payback, discounted payback, and NPV.
@@ -170,9 +239,20 @@ def evaluate_investment(
         annual_net_cashflow_eur=annual_net_cashflow_eur,
         simple_payback_years=simple_payback_years(capex_eur, annual_net_cashflow_eur),
         discounted_payback_years=discounted_payback_years(
-            capex_eur, annual_net_cashflow_eur, discount_rate, max_years=horizon_years + 10
+            capex_eur,
+            annual_net_cashflow_eur,
+            discount_rate,
+            max_years=horizon_years + 10,
+            replacements=bess_replacements,
         ),
-        npv_eur=npv(capex_eur, annual_net_cashflow_eur, discount_rate, horizon_years),
+        npv_eur=npv(
+            capex_eur,
+            annual_net_cashflow_eur,
+            discount_rate,
+            horizon_years,
+            replacements=bess_replacements,
+        ),
         discount_rate=discount_rate,
         horizon_years=horizon_years,
+        replacement_cost_pv_eur=_replacement_pv(bess_replacements, discount_rate, horizon_years),
     )

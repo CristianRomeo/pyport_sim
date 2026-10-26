@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from database import DatabaseManager
-from economics.degradation import estimate_bess_degradation
+from economics.degradation import estimate_bess_degradation, bess_life_years_from_run
 from economics.metrics import register_economic_metrics
 
 
@@ -44,3 +44,26 @@ def test_estimate_bess_degradation_basic(db):
 def test_estimate_bess_degradation_missing_source_raises(db):
     with pytest.raises(ValueError):
         estimate_bess_degradation(db, "NoSuchBattery", capacity_kwh=100.0)
+
+
+def test_bess_life_is_capped_by_calendar_life_when_barely_used(db):
+    _log_constant_power(db, "Funchal", "bess_discharge", power_kw=1.0, n_steps=10)
+    _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
+    life = bess_life_years_from_run(db, "Funchal", 200.0, days_simulated=7, calendar_life_years=15.0)
+    assert life == pytest.approx(15.0)
+
+
+def test_bess_life_is_shorter_with_heavier_cycling(db):
+    # 100 kW over 9 intervals of 15 min = 225 kWh = 2.25 cycles of 100 kWh in "7 days"
+    _log_constant_power(db, "Funchal", "bess_discharge", power_kw=100.0, n_steps=10)
+    _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
+    heavy = bess_life_years_from_run(db, "Funchal", 100.0, days_simulated=7, calendar_life_years=50.0)
+    # 2.25 cycles/week -> ~117 cycles/year -> 3000 cycles to 80% health -> ~25.6 years
+    assert heavy == pytest.approx(3000 / (2.25 * 365 / 7), rel=1e-6)
+    assert heavy < 50.0
+
+
+def test_bess_life_without_any_cycling_is_calendar_life(db):
+    _log_constant_power(db, "Funchal", "bess_discharge", power_kw=0.0, n_steps=10)
+    _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
+    assert bess_life_years_from_run(db, "Funchal", 200.0, calendar_life_years=12.0) == pytest.approx(12.0)

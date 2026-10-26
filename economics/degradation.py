@@ -117,3 +117,48 @@ def estimate_bess_degradation(
         estimated_soh=estimated_soh,
         remaining_cycles_to_eol=remaining_cycles_to_eol,
     )
+
+
+def bess_life_years_from_run(
+    db_manager,
+    source_name: str,
+    capacity_kwh: float,
+    days_simulated: int = 7,
+    calendar_life_years: float = 15.0,
+    eol_soh_threshold: float = DEFAULT_EOL_SOH_THRESHOLD,
+    cycle_life_curve: Optional[Sequence[Tuple[float, float]]] = None,
+) -> float:
+    """
+    Battery life (years) derived from the simulated cycling.
+
+    The equivalent full cycles of the simulated period are scaled to a year
+    (x 365 / days_simulated) and divided into the cycles the battery can do
+    before reaching end of life (80% health by default). The result is capped
+    by `calendar_life_years`, because a battery also ages with time even when
+    it is hardly used.
+
+    NOTE: PyPort logs bess_charge / bess_discharge under the PORT source
+    (e.g. "Funchal"), not under the battery source, so pass the port name.
+
+    Args:
+        db_manager: DatabaseManager of a completed DER run.
+        source_name: Source that carries bess_charge / bess_discharge.
+        capacity_kwh: Nominal battery capacity (kWh).
+        days_simulated: Length of the simulated period (days).
+        calendar_life_years: Upper limit on the life, from time-ageing.
+
+    Returns:
+        Expected years until replacement.
+    """
+    result = estimate_bess_degradation(
+        db_manager,
+        source_name,
+        capacity_kwh,
+        eol_soh_threshold=eol_soh_threshold,
+        cycle_life_curve=cycle_life_curve,
+    )
+    if result.equivalent_full_cycles <= 0 or days_simulated <= 0:
+        return calendar_life_years
+    cycles_per_year = result.equivalent_full_cycles * 365.0 / days_simulated
+    cycles_to_eol = result.equivalent_full_cycles + result.remaining_cycles_to_eol
+    return min(cycles_to_eol / cycles_per_year, calendar_life_years)
