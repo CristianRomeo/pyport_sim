@@ -138,3 +138,44 @@ def test_evaluate_investment_with_replacement_lowers_npv():
     assert with_repl.replacement_cost_pv_eur == pytest.approx(20000 / 1.07 ** 10)
     assert with_repl.simple_payback_years == pytest.approx(plain.simple_payback_years)
     assert with_repl.discounted_payback_years >= plain.discounted_payback_years
+
+
+def test_discounted_payback_pays_for_replacements_due_after_the_horizon():
+    base = evaluate_investment(370_000, 44_892 / 365, 0.0, 0.07, 20,
+                               bess_replacements={7: 130_000, 14: 130_000})
+    extended = evaluate_investment(370_000, 44_892 / 365, 0.0, 0.07, 20,
+                                   bess_replacements={7: 130_000, 14: 130_000},
+                                   bess_replacements_extended={7: 130_000, 14: 130_000, 21: 130_000, 28: 130_000})
+    assert extended.npv_eur == pytest.approx(base.npv_eur)
+    assert extended.discounted_payback_years > base.discounted_payback_years
+
+
+# ---- battery price cases and sensitivity ---------------------------------------
+from economics.payback import bess_price_decline_for_case, npv_sensitivity
+
+
+def test_price_decline_cases():
+    assert bess_price_decline_for_case("low") == pytest.approx(0.015)
+    assert bess_price_decline_for_case("mid") == pytest.approx(0.035)
+    assert bess_price_decline_for_case("high") == pytest.approx(0.055)
+
+
+def test_price_decline_unknown_case_raises():
+    with pytest.raises(ValueError):
+        bess_price_decline_for_case("huge")
+
+
+def test_npv_sensitivity_base_matches_npv_with_replacements():
+    rows = npv_sensitivity(370_000, 36_986, 130_000, 6.8, 0.07, 20)
+    expected = npv(370_000, 36_986, 0.07, 20, {7: 130_000, 14: 130_000})
+    assert rows[0][0] == "Base case"
+    assert rows[0][1] == pytest.approx(expected)
+
+
+def test_npv_sensitivity_ordering():
+    values = dict(npv_sensitivity(370_000, 36_986, 130_000, 6.8, 0.07, 20))
+    base = values["Base case"]
+    assert values["Battery price falls 1.5% a year"] > base
+    assert values["Battery price falls 5.5% a year"] > values["Battery price falls 3.5% a year"]
+    assert values["Battery lasts twice as long"] > base
+    assert values["Battery never replaced"] > values["Battery lasts twice as long"]

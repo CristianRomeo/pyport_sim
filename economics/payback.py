@@ -18,7 +18,7 @@ Streamlit "what-if" dashboard.
 
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 def annualize_daily_value(daily_value: float, days_per_year: int = 365) -> float:
@@ -94,6 +94,23 @@ def bess_replacement_schedule(
         schedule[year] = bess_capex_eur * (1.0 - annual_price_decline) ** year
         k += 1
     return schedule
+
+
+# Yearly fall of the battery price, used for the replacement cost only.
+# Source: NREL ATB 2024, commercial battery storage (600 kW, 4 h): CAPEX
+# reduction 2022-2035 of 17.5 % (conservative), 36.5 % (moderate) and 52 %
+# (advanced), annualised over 13 years. Indicative: replace with vendor data.
+BESS_PRICE_DECLINE_CASES: Dict[str, float] = {"low": 0.015, "mid": 0.035, "high": 0.055}
+
+
+def bess_price_decline_for_case(case: str) -> float:
+    """Yearly battery price decline for a named case ('low', 'mid', 'high')."""
+    try:
+        return BESS_PRICE_DECLINE_CASES[case]
+    except KeyError:
+        raise ValueError(
+            f"Unknown battery price case {case!r}; choose from {sorted(BESS_PRICE_DECLINE_CASES)}"
+        ) from None
 
 
 def _replacement_pv(
@@ -209,6 +226,7 @@ def evaluate_investment(
     horizon_years: int = 20,
     days_per_year: int = 365,
     bess_replacements: Optional[Dict[int, float]] = None,
+    bess_replacements_extended: Optional[Dict[int, float]] = None,
 ) -> PaybackResult:
     """
     One-call convenience wrapper: turn a daily operational saving plus a
@@ -225,6 +243,10 @@ def evaluate_investment(
         bess_replacements: Optional {year: cost} of battery replacements,
             e.g. from bess_replacement_schedule(). Affects NPV and
             discounted payback; the simple payback ignores it by definition.
+        bess_replacements_extended: Optional schedule built over
+            horizon_years + 10 (the discounted-payback search window), so a
+            payback found after the horizon still pays for the replacements
+            due in that window. Defaults to bess_replacements.
 
     Returns:
         A PaybackResult with simple payback, discounted payback, and NPV.
@@ -243,7 +265,11 @@ def evaluate_investment(
             annual_net_cashflow_eur,
             discount_rate,
             max_years=horizon_years + 10,
-            replacements=bess_replacements,
+            replacements=(
+                bess_replacements_extended
+                if bess_replacements_extended is not None
+                else bess_replacements
+            ),
         ),
         npv_eur=npv(
             capex_eur,
@@ -256,3 +282,38 @@ def evaluate_investment(
         horizon_years=horizon_years,
         replacement_cost_pv_eur=_replacement_pv(bess_replacements, discount_rate, horizon_years),
     )
+
+
+def npv_sensitivity(
+    capex_eur: float,
+    annual_net_cashflow_eur: float,
+    bess_capex_eur: float,
+    base_life_years: float,
+    discount_rate: float = 0.07,
+    horizon_years: int = 20,
+    calendar_life_years: float = 15.0,
+) -> List[Tuple[str, float]]:
+    """
+    NPV of one scenario under different battery assumptions.
+
+    Only the battery life and the replacement price change; cash flow and
+    CAPEX stay as given, so no new simulation is needed.
+
+    Returns:
+        [(label, npv_eur), ...] with the base case first.
+    """
+
+    def _npv(life: float, decline: float = 0.0) -> float:
+        schedule = bess_replacement_schedule(bess_capex_eur, life, horizon_years, decline)
+        return npv(capex_eur, annual_net_cashflow_eur, discount_rate, horizon_years, schedule)
+
+    longer_life = min(2 * base_life_years, calendar_life_years)
+    mid = BESS_PRICE_DECLINE_CASES["mid"]
+    rows: List[Tuple[str, float]] = [("Base case", _npv(base_life_years))]
+    rows.append(("Battery lasts twice as long", _npv(longer_life)))
+    for case in ("low", "mid", "high"):
+        rate = BESS_PRICE_DECLINE_CASES[case]
+        rows.append((f"Battery price falls {rate:.1%} a year", _npv(base_life_years, rate)))
+    rows.append((f"Twice as long and {mid:.1%} a year", _npv(longer_life, mid)))
+    rows.append(("Battery never replaced", _npv(0)))
+    return rows
