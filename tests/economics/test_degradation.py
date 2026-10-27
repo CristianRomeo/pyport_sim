@@ -67,3 +67,25 @@ def test_bess_life_without_any_cycling_is_calendar_life(db):
     _log_constant_power(db, "Funchal", "bess_discharge", power_kw=0.0, n_steps=10)
     _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
     assert bess_life_years_from_run(db, "Funchal", 200.0, calendar_life_years=12.0) == pytest.approx(12.0)
+
+
+def test_bess_life_from_weeks_matches_single_week(db):
+    from economics.degradation import bess_life_years_from_weeks
+
+    _log_constant_power(db, "Funchal", "bess_discharge", power_kw=100.0, n_steps=10)
+    _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
+    single_week = bess_life_years_from_run(db, "Funchal", 100.0, days_simulated=7, calendar_life_years=50.0)
+    year_weeks = 365.0 / 7.0
+    # the same week standing for the whole year, or split into two halves
+    assert bess_life_years_from_weeks([(db, year_weeks)], "Funchal", 100.0, 50.0) == pytest.approx(single_week)
+    assert bess_life_years_from_weeks(
+        [(db, year_weeks / 2), (db, year_weeks / 2)], "Funchal", 100.0, 50.0
+    ) == pytest.approx(single_week)
+
+
+def test_bess_life_from_weeks_without_cycling_is_calendar_life(db):
+    from economics.degradation import bess_life_years_from_weeks
+
+    _log_constant_power(db, "Funchal", "bess_discharge", power_kw=0.0, n_steps=10)
+    _log_constant_power(db, "Funchal", "bess_charge", power_kw=0.0, n_steps=10)
+    assert bess_life_years_from_weeks([(db, 52.0)], "Funchal", 200.0, 12.0) == pytest.approx(12.0)

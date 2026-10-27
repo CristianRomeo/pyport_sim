@@ -162,3 +162,44 @@ def bess_life_years_from_run(
     cycles_per_year = result.equivalent_full_cycles * 365.0 / days_simulated
     cycles_to_eol = result.equivalent_full_cycles + result.remaining_cycles_to_eol
     return min(cycles_to_eol / cycles_per_year, calendar_life_years)
+
+
+def bess_life_years_from_weeks(
+    db_managers_and_weeks: Sequence[Tuple[object, float]],
+    source_name: str,
+    capacity_kwh: float,
+    calendar_life_years: float = 15.0,
+    eol_soh_threshold: float = DEFAULT_EOL_SOH_THRESHOLD,
+    cycle_life_curve: Optional[Sequence[Tuple[float, float]]] = None,
+) -> float:
+    """
+    Battery life (years) from several representative weeks (one per season).
+
+    Each simulated week gives its equivalent full cycles. A week stands for
+    `weeks` weeks of the year, so the yearly cycles are
+    sum(cycles of the week x weeks it represents). The life is the cycles
+    the battery can do before end of life divided by the yearly cycles,
+    capped by `calendar_life_years`.
+
+    Args:
+        db_managers_and_weeks: [(DatabaseManager of a DER run, weeks of the
+            year that run represents), ...].
+        source_name: Source carrying bess_charge / bess_discharge (the port
+            name, e.g. "Funchal").
+        capacity_kwh: Nominal battery capacity (kWh).
+    """
+    cycles_per_year = 0.0
+    cycles_to_eol = None
+    for db_manager, weeks in db_managers_and_weeks:
+        result = estimate_bess_degradation(
+            db_manager,
+            source_name,
+            capacity_kwh,
+            eol_soh_threshold=eol_soh_threshold,
+            cycle_life_curve=cycle_life_curve,
+        )
+        cycles_per_year += result.equivalent_full_cycles * weeks
+        cycles_to_eol = result.equivalent_full_cycles + result.remaining_cycles_to_eol
+    if cycles_per_year <= 0 or cycles_to_eol is None:
+        return calendar_life_years
+    return min(cycles_to_eol / cycles_per_year, calendar_life_years)
