@@ -182,3 +182,6 @@ output/
 
 comparison_results/
 .cursor/
+size_*.csv
+prova*.csv
+garmin_seasons3*.csv
