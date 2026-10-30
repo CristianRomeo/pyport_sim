@@ -18,7 +18,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from database import DatabaseManager
 
@@ -54,10 +54,35 @@ def load_tariff_price_fn(tariff_json_path: str):
     return price_fn
 
 
+def _import_intervals(db_manager: DatabaseManager, grid_source_name: str, price_fn):
+    """Yield (timestamp, power_kw, dt_hours, price) for each logged import interval."""
+    source = db_manager.get_source(source_name=grid_source_name)
+    if source is None:
+        raise ValueError(f"No source named '{grid_source_name}' found")
+
+    metric_id = db_manager.get_metric_id("power_active_import")
+    rows = db_manager.get_records(
+        "measurements", source_id=source["source_id"], metric_id=metric_id
+    )
+
+    if len(rows) < 2:
+        return
+
+    prev_row = rows[0]
+    for row in rows[1:]:
+        t_prev = datetime.fromisoformat(prev_row["timestamp"])
+        t_curr = datetime.fromisoformat(row["timestamp"])
+        dt_hours = (t_curr - t_prev).total_seconds() / 3600.0
+        yield prev_row["timestamp"], float(prev_row["value"]), dt_hours, price_fn(t_prev)
+        prev_row = row
+
+
 def compute_grid_energy_cost(
     db_manager: DatabaseManager,
     grid_source_name: str,
     tariff_json_path: str,
+    excess_threshold_kw: Optional[float] = None,
+    excess_price_factor: float = 1.0,
 ) -> List[Tuple[str, float]]:
     """
     Compute grid_energy_cost (EUR) per timestep, for one source's logged
@@ -69,37 +94,63 @@ def compute_grid_energy_cost(
             logged by PyPort (e.g. the port's own name).
         tariff_json_path: Tariff JSON to price against (pick the seasonal
             one matching the run's dates via tariff_seasonal.get_seasonal_tariff_path).
+        excess_threshold_kw: Optional power threshold. The part of the grid
+            import above it is priced at excess_price_factor times the
+            tariff (None = no surcharge).
+        excess_price_factor: Price multiplier for the energy above the
+            threshold (1.0 = same price, 2.0 = double).
 
     Returns:
         List of (timestamp, cost_eur) tuples, one per measurement row.
     """
     price_fn = load_tariff_price_fn(tariff_json_path)
-
-    source = db_manager.get_source(source_name=grid_source_name)
-    if source is None:
-        raise ValueError(f"No source named '{grid_source_name}' found")
-
-    metric_id = db_manager.get_metric_id("power_active_import")
-    rows = db_manager.get_records(
-        "measurements", source_id=source["source_id"], metric_id=metric_id
-    )
-
-    if len(rows) < 2:
-        return []
-
     results = []
-    prev_row = rows[0]
-    for row in rows[1:]:
-        t_prev = datetime.fromisoformat(prev_row["timestamp"])
-        t_curr = datetime.fromisoformat(row["timestamp"])
-        dt_hours = (t_curr - t_prev).total_seconds() / 3600.0
-        power_kw = float(prev_row["value"])
-        price = price_fn(t_prev)
-        cost_eur = power_kw * dt_hours * price
-        results.append((prev_row["timestamp"], cost_eur))
-        prev_row = row
-
+    for ts, power_kw, dt_hours, price in _import_intervals(db_manager, grid_source_name, price_fn):
+        if excess_threshold_kw is None:
+            billed_kw = power_kw
+        else:
+            base_kw = min(power_kw, excess_threshold_kw)
+            billed_kw = base_kw + max(0.0, power_kw - excess_threshold_kw) * excess_price_factor
+        results.append((ts, billed_kw * dt_hours * price))
     return results
+
+
+def grid_cost_split(
+    db_manager: DatabaseManager,
+    grid_source_name: str,
+    tariff_json_path: str,
+    threshold_kw: float,
+) -> Tuple[float, float, float]:
+    """
+    Total grid cost at the normal tariff, split to show what lies above a power threshold.
+
+    Returns:
+        (total_cost_eur, excess_cost_eur, excess_energy_kwh), where
+        excess_cost_eur is the cost, at the normal tariff, of the import
+        above threshold_kw. With a surcharge factor f the bill is
+        total + (f - 1) * excess_cost_eur, so one simulation answers every f.
+    """
+    price_fn = load_tariff_price_fn(tariff_json_path)
+    total = excess_cost = excess_kwh = 0.0
+    for _, power_kw, dt_hours, price in _import_intervals(db_manager, grid_source_name, price_fn):
+        over_kw = max(0.0, power_kw - threshold_kw)
+        total += power_kw * dt_hours * price
+        excess_cost += over_kw * dt_hours * price
+        excess_kwh += over_kw * dt_hours
+    return total, excess_cost, excess_kwh
+
+
+def grid_peak_kw(
+    db_manager: DatabaseManager,
+    grid_source_name: str,
+    tariff_json_path: str,
+) -> float:
+    """Highest logged grid import power (kW) of the run: the 'peak' a power charge is based on."""
+    price_fn = load_tariff_price_fn(tariff_json_path)
+    return max(
+        (p for _, p, _, _ in _import_intervals(db_manager, grid_source_name, price_fn)),
+        default=0.0,
+    )
 
 
 def save_economic_series(
