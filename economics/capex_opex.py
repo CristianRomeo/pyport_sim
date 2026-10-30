@@ -90,15 +90,34 @@ class CapexBreakdown:
 
     bess_kwh: float = 0.0
     bess_eur_per_kwh: float = 650.0       # TODO: BES-09/10, confirm with quote
+    # Battery POWER. The EUR/kWh price above covers a battery that can charge or
+    # discharge in 4 hours (0.25 kW per kWh, bess_ref_kw_per_kwh). Power above
+    # that reference costs bess_eur_per_extra_kw more (inverter / power
+    # conversion). bess_kw = 0 means "not specified": no extra cost.
+    # TODO: 100 EUR/kW is an ESTIMATE for a commercial-size inverter (typical
+    # range 80-150 EUR/kW), not a quote. It is conservative: European C&I
+    # packages are commonly sold at 0.4-0.5 kW per kWh within their EUR/kWh
+    # price. Replace with the supplier quote.
+    bess_kw: float = 0.0
+    bess_ref_kw_per_kwh: float = 0.25
+    bess_eur_per_extra_kw: float = 100.0
     pv_wp: float = 0.0
     pv_eur_per_wp: float = 2.4            # TODO: PV-08, confirm with quote
     evse_units: int = 0
     evse_eur_per_unit: float = 26000.0    # TODO: EVS-05, confirm with quote
 
+    def bess_extra_power_eur(self) -> float:
+        """Cost (EUR) of battery power above the reference included in the EUR/kWh price."""
+        if self.bess_kwh <= 0 or self.bess_kw <= 0:
+            return 0.0
+        extra_kw = max(0.0, self.bess_kw - self.bess_ref_kw_per_kwh * self.bess_kwh)
+        return extra_kw * self.bess_eur_per_extra_kw
+
     def total(self) -> float:
-        """Sum of PV + BESS + EVSE CAPEX (EUR)."""
+        """Sum of PV + BESS (+ extra battery power) + EVSE CAPEX (EUR)."""
         return (
             self.bess_kwh * self.bess_eur_per_kwh
+            + self.bess_extra_power_eur()
             + self.pv_wp * self.pv_eur_per_wp
             + self.evse_units * self.evse_eur_per_unit
         )

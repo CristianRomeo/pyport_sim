@@ -40,6 +40,24 @@ def test_capex_breakdown_total():
     assert capex.total() == pytest.approx(expected)
 
 
+def test_battery_power_at_reference_costs_nothing_extra():
+    # 200 kWh at 50 kW is the 4-hour reference: no extra power cost
+    capex = CapexBreakdown(bess_kwh=200, bess_kw=50)
+    assert capex.bess_extra_power_eur() == 0.0
+    assert capex.total() == pytest.approx(200 * capex.bess_eur_per_kwh)
+
+
+def test_battery_power_above_reference_is_charged_per_kw():
+    capex = CapexBreakdown(bess_kwh=200, bess_kw=100)
+    assert capex.bess_extra_power_eur() == pytest.approx(50 * capex.bess_eur_per_extra_kw)
+    assert capex.total() == pytest.approx(200 * capex.bess_eur_per_kwh + 50 * capex.bess_eur_per_extra_kw)
+
+
+def test_battery_power_unspecified_or_no_battery_adds_nothing():
+    assert CapexBreakdown(bess_kwh=200).bess_extra_power_eur() == 0.0
+    assert CapexBreakdown(bess_kwh=0, bess_kw=100).bess_extra_power_eur() == 0.0
+
+
 def test_opex_breakdown_total():
     opex = OpexBreakdown(bess_capex=65000, pv_wp=50000, evse_units=2)
     expected = (
