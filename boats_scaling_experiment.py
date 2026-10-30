@@ -69,6 +69,22 @@ For this reason contracted_power is FIXED at 80 kW for every fleet size
 deliberately not a CLI parameter and is never scaled with num_boats, so
 results at every fleet size are directly comparable.
 
+PRICE ABOVE A POWER THRESHOLD: --excess-threshold-kw (default 80) and
+--excess-factor (default 1 = off) price the grid import above that power at
+factor x the tariff. The surcharge is applied after the simulation, so the
+optimizer does not try to avoid it: the optimized scenarios are then a
+conservative estimate. The summary CSV also stores, per scenario, the cost
+(at the normal tariff) and the energy above the threshold, so any other
+factor can be applied afterwards without simulating again.
+
+POWER CHARGE ON THE PEAK (alternative to the price above): the CSV also stores
+the highest weekly grid peak of each scenario and the "kW-months above the
+threshold" per year (peak above --excess-threshold-kw, times the 3 billing
+months each season stands for). A charge of R EUR/kW-month on the excess peak
+costs R x kW-months per year; summarize_runs.py --peak-rate R applies it. Only
+one week per season is simulated, so the monthly peak is approximated by that
+week's peak (the real monthly peak can only be higher).
+
 This does NOT touch your existing scenario_*.db files - every run writes
 to its own new db named scenario_scaling_{baseline|der}_{N}boats.db, so
 nothing you've already produced is at risk. Each run calls Open-Meteo for
@@ -96,7 +112,7 @@ from models import Port, Boat, Charger, PV, BESS, BESSControlStrategy
 from config import Settings, SimulationMode
 from database import DatabaseManager
 from simulation import SimulationEngine
-from economics.run_economics import compute_grid_energy_cost
+from economics.run_economics import grid_cost_split, grid_peak_kw
 from economics.capex_opex import CapexBreakdown, OpexBreakdown
 from economics.payback import evaluate_investment, bess_replacement_schedule, bess_price_decline_for_case
 from economics.degradation import bess_life_years_from_weeks
@@ -152,7 +168,15 @@ BOAT_SPEC = dict(motor_power=120, weight=2500, length=8.5,
 #   P_cont = number of boats x charger power
 # CHARGER_KW is read at call time, so scripts that override it (e.g. the
 # Garmin wrapper) are followed automatically.
+# GRID_LIMIT_KW (set by --grid-limit-kw) is an EXPERIMENT override: when given,
+# the same fixed grid limit is used for every fleet size, e.g. 80 kW to test a
+# power cap. None (default) keeps the supervisor's rule above.
+GRID_LIMIT_KW = None
+
+
 def contracted_power_for(num_boats: int) -> float:
+    if GRID_LIMIT_KW is not None:
+        return GRID_LIMIT_KW
     return num_boats * CHARGER_KW
 
 START_DATE = "2025-09-01"  # legacy single week ("sep")
@@ -244,10 +268,13 @@ def db_path_for(tag: str, season: str, num_boats: int) -> str:
 
 def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
                  start_date: str = None, season: str = "sep",
-                 use_optimizer: bool = None) -> tuple:
+                 use_optimizer: bool = None, excess_threshold_kw: float = 80.0) -> tuple:
     """
     Run one 7-day scenario starting on start_date (default: START_DATE).
-    Returns (weekly_cost_eur, service_level, assigned_trips).
+    Returns (weekly_cost_eur, service_level, assigned_trips, excess_eur, excess_kwh, peak_kw):
+    the weekly cost at the normal tariff, and the cost (at the normal tariff)
+    and energy of the grid import above excess_threshold_kw, so a surcharge on
+    that energy can be applied afterwards without simulating again.
 
     service_level = fraction of ASSIGNED trips that the boat actually
     completed (returned to port), out of all trips trip_manager assigned
@@ -290,19 +317,22 @@ def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
     completed_trips = len(_RETURNED_RE.findall(log_text))
     service_level = (completed_trips / assigned_trips) if assigned_trips else float("nan")
 
-    cost_series = compute_grid_energy_cost(db_manager, port.name, TARIFF_PATH)
-    weekly_cost = sum(cost for _, cost in cost_series)
+    weekly_cost, excess_eur, excess_kwh = grid_cost_split(
+        db_manager, port.name, TARIFF_PATH, excess_threshold_kw)
+    peak_kw = grid_peak_kw(db_manager, port.name, TARIFF_PATH)
     print(
         f"  -> {db_path}: contracted_power={contracted_power:.1f}kW, "
         f"weekly grid cost = EUR {weekly_cost:.2f}, "
+        f"import above {excess_threshold_kw:.0f} kW = {excess_kwh:.1f} kWh, "
+        f"peak = {peak_kw:.1f} kW, "
         f"service level = {completed_trips}/{assigned_trips} trips "
         f"({service_level:.1%})"
     )
-    return weekly_cost, service_level, assigned_trips
+    return weekly_cost, service_level, assigned_trips, excess_eur, excess_kwh, peak_kw
 
 
 def main():
-    global PV_KW, BESS_KWH, BESS_KW
+    global PV_KW, BESS_KWH, BESS_KW, GRID_LIMIT_KW
     parser = argparse.ArgumentParser(description="Boat-count scaling sensitivity for a fixed PV+BESS install")
     parser.add_argument("--boat-counts", type=int, nargs="+", default=[2, 3, 4, 5, 6, 8, 10],
                          help="Boat/charger counts to test (default: 2 3 4 5 6 8 10)")
@@ -331,6 +361,17 @@ def main():
                          help="Battery capacity in kWh (0 = no battery, no replacements). Default 200")
     parser.add_argument("--bess-kw", type=float, default=None,
                          help="Battery charge/discharge power in kW (default: 50, or capacity/4 if smaller)")
+    parser.add_argument("--excess-threshold-kw", type=float, default=80.0,
+                         help="Grid power above which energy costs more (default 80 kW)")
+    parser.add_argument("--excess-factor", type=float, default=1.0,
+                         help="Price multiplier for the grid import above the threshold "
+                              "(default 1 = no surcharge; 2 = double). Applied after the simulation: "
+                              "the optimizer is not aware of it, so with a surcharge the savings "
+                              "of the optimized scenarios are conservative")
+    parser.add_argument("--grid-limit-kw", type=float, default=None,
+                         help="EXPERIMENT: fixed grid-import limit in kW for every fleet size "
+                              "(default: boats x charger kW). A limit below the charging demand "
+                              "makes the optimizer spread or skip charging, so check service level")
     parser.add_argument("--out-csv", default="boats_scaling_results.csv")
     args = parser.parse_args()
     if args.bess_decline_case:
@@ -338,6 +379,7 @@ def main():
             parser.error("Use either --bess-price-decline or --bess-decline-case, not both.")
         args.bess_price_decline = bess_price_decline_for_case(args.bess_decline_case)
 
+    GRID_LIMIT_KW = args.grid_limit_kw
     PV_KW = args.pv_kwp
     BESS_KWH = args.bess_kwh
     BESS_KW = args.bess_kw if args.bess_kw is not None else min(50.0, BESS_KWH / 4.0)
@@ -353,21 +395,41 @@ def main():
         contracted_power = contracted_power_for(n)
         print(f"\n=== {n} boats (contracted_power = {contracted_power:.1f} kW) ===")
         annual_baseline = annual_der = annual_sched = 0.0
+        exc_eur = {"base": 0.0, "sched": 0.0, "der": 0.0}
+        exc_kwh = {"base": 0.0, "sched": 0.0, "der": 0.0}
+        peak_exc = {"base": 0.0, "sched": 0.0, "der": 0.0}   # kW-months/year above threshold
+        peak_max = {"base": 0.0, "sched": 0.0, "der": 0.0}   # highest weekly peak, kW
         completed_base = completed_der = completed_sched = assigned_total = 0.0
         der_weeks = []
         for season in args.seasons:
             start, weeks = SEASONS[season][0], SEASONS[season][1] * weight_scale
             print(f"--- {season}: week starting {start} (counts for {weeks:.1f} weeks of the year) ---")
             print("Running baseline (no PV/BESS)...")
-            base_cost, base_sl, assigned = run_scenario(n, False, contracted_power, start, season)
-            sched_cost, sched_sl = float("nan"), float("nan")
+            thr, fac = args.excess_threshold_kw, args.excess_factor
+            base_cost, base_sl, assigned, base_xe, base_xk, base_pk = run_scenario(
+                n, False, contracted_power, start, season, excess_threshold_kw=thr)
+            base_cost += (fac - 1.0) * base_xe
+            sched_cost, sched_sl, sched_xe, sched_xk, sched_pk = float("nan"), float("nan"), 0.0, 0.0, 0.0
             if not args.skip_scheduled:
                 print("Running scheduled baseline (optimizer, no PV/BESS)...")
-                sched_cost, sched_sl, _ = run_scenario(
-                    n, False, contracted_power, start, season, use_optimizer=True)
+                sched_cost, sched_sl, _, sched_xe, sched_xk, sched_pk = run_scenario(
+                    n, False, contracted_power, start, season, use_optimizer=True,
+                    excess_threshold_kw=thr)
+                sched_cost += (fac - 1.0) * sched_xe
             print("Running DER scenario (PV+BESS+optimizer)...")
-            der_cost, der_sl, assigned_der = run_scenario(n, True, contracted_power, start, season)
+            der_cost, der_sl, assigned_der, der_xe, der_xk, der_pk = run_scenario(
+                n, True, contracted_power, start, season, excess_threshold_kw=thr)
+            der_cost += (fac - 1.0) * der_xe
 
+            # Power-charge basis: kW of weekly peak above the threshold, times the
+            # billing months the season stands for (a 13-week season = 3 months).
+            months = weeks * 12.0 / year_weeks
+            for key, pk in (("base", base_pk), ("sched", sched_pk), ("der", der_pk)):
+                peak_exc[key] += max(0.0, pk - args.excess_threshold_kw) * months
+                peak_max[key] = max(peak_max[key], pk)
+            for key, xe, xk in (("base", base_xe, base_xk), ("sched", sched_xe, sched_xk), ("der", der_xe, der_xk)):
+                exc_eur[key] += xe * weeks
+                exc_kwh[key] += xk * weeks
             annual_baseline += base_cost * weeks
             annual_der += der_cost * weeks
             if not args.skip_scheduled:
@@ -382,6 +444,10 @@ def main():
                 "assigned_trips": assigned,
                 "baseline_weekly_eur": round(base_cost, 2), "baseline_service_level": round(base_sl, 3),
                 "der_weekly_eur": round(der_cost, 2), "der_service_level": round(der_sl, 3),
+                "baseline_excess_kwh": round(base_xk, 1), "scheduled_excess_kwh": round(sched_xk, 1),
+                "der_excess_kwh": round(der_xk, 1),
+                "baseline_peak_kw": round(base_pk, 1), "scheduled_peak_kw": round(sched_pk, 1),
+                "der_peak_kw": round(der_pk, 1),
                 "scheduled_weekly_eur": "" if args.skip_scheduled else round(sched_cost, 2),
                 "scheduled_service_level": "" if args.skip_scheduled else round(sched_sl, 3),
                 "weekly_savings_eur": round((base_cost if args.skip_scheduled else sched_cost) - der_cost, 2),
@@ -448,6 +514,20 @@ def main():
             "pv_kwp": PV_KW,
             "bess_kwh": BESS_KWH,
             "contracted_power_kw": round(contracted_power, 1),
+            "excess_threshold_kw": args.excess_threshold_kw,
+            "excess_factor": args.excess_factor,
+            "baseline_excess_eur_week": round(exc_eur["base"] / year_weeks, 2),
+            "scheduled_excess_eur_week": "" if args.skip_scheduled else round(exc_eur["sched"] / year_weeks, 2),
+            "der_excess_eur_week": round(exc_eur["der"] / year_weeks, 2),
+            "baseline_excess_kwh_week": round(exc_kwh["base"] / year_weeks, 1),
+            "scheduled_excess_kwh_week": "" if args.skip_scheduled else round(exc_kwh["sched"] / year_weeks, 1),
+            "der_excess_kwh_week": round(exc_kwh["der"] / year_weeks, 1),
+            "baseline_peak_kw": round(peak_max["base"], 1),
+            "scheduled_peak_kw": "" if args.skip_scheduled else round(peak_max["sched"], 1),
+            "der_peak_kw": round(peak_max["der"], 1),
+            "baseline_peak_excess_kwmonths": round(peak_exc["base"], 2),
+            "scheduled_peak_excess_kwmonths": "" if args.skip_scheduled else round(peak_exc["sched"], 2),
+            "der_peak_excess_kwmonths": round(peak_exc["der"], 2),
             "seasons": "+".join(args.seasons),
             "assigned_trips_week": round(assigned_week, 2),
             "baseline_weekly_eur": round(baseline_weekly, 2),
