@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Marina Electrification Planner</title>
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap">
+    <style>
+        :root {
+            --bg: #F5FAFA;
+            --ink: #17282E;
+            --muted: #5A6E75;
+            --rule: #C5D8DB;
+            --faint: #E6F0F1;
+            --accent: #0E6F7E;
+            --sel: #D8EEF0;
+            --bad: #B23A2B;
+            --good: #1E7A48;
+            --warn: #B26A00;
+            --serif: 'Fraunces', Georgia, serif;
+            --sans: 'Figtree', system-ui, 'Segoe UI', sans-serif;
+            --mono: 'Figtree', system-ui, sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0F1C21;
+                --ink: #E3EEF0;
+                --muted: #93A9AF;
+                --rule: #2B4249;
+                --faint: #172A30;
+                --accent: #6CCBD8;
+                --sel: #1B3A41;
+                --bad: #F29A8D;
+                --good: #82D4A2;
+                --warn: #E3AE5A;
+                color-scheme: dark
+            }
+        }
+
+        :root[data-theme="dark"] {
+            --bg: #0F1C21;
+            --ink: #E3EEF0;
+            --muted: #93A9AF;
+            --rule: #2B4249;
+            --faint: #172A30;
+            --accent: #6CCBD8;
+            --sel: #1B3A41;
+            --bad: #F29A8D;
+            --good: #82D4A2;
+            --warn: #E3AE5A;
+            color-scheme: dark
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html {
+            background: var(--bg)
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: var(--sans);
+            font-size: 16px;
+            line-height: 1.55;
+            padding-block: 28px 64px;
+            padding-left: max(16px, env(safe-area-inset-left, 0px));
+            padding-right: max(16px, env(safe-area-inset-right, 0px))
+        }
+
+        .page {
+            max-width: 1080px;
+            margin: 0 auto
+        }
+
+        h1 {
+            font-family: var(--serif);
+            font-size: 32px;
+            font-weight: 600;
+            line-height: 1.15;
+            margin: 0 0 8px;
+            color: var(--accent)
+        }
+
+        h2 {
+            font-family: var(--serif);
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid var(--rule)
+        }
+
+        p {
+            margin: 0 0 10px;
+            max-width: 70ch
+        }
+
+        .lead {
+            color: var(--muted)
+        }
+
+        .cols {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+            gap: 40px;
+            margin-top: 24px
+        }
+
+        @media (max-width:860px) {
+            .cols {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 28px
+            }
+        }
+
+        section {
+            margin-bottom: 30px
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 2px
+        }
+
+        fieldset {
+            border: 0;
+            border-top: 1px solid var(--rule);
+            margin: 10px 0 0;
+            padding: 6px 0 0;
+            min-width: 0
+        }
+
+        legend {
+            font-family: var(--serif);
+            font-size: 15px;
+            color: var(--accent);
+            padding: 0 8px 0 0
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 92px;
+            gap: 8px;
+            align-items: baseline;
+            padding: 3px 0
+        }
+
+        .row label {
+            font-size: 15px
+        }
+
+        .row small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.3
+        }
+
+        input[type=number],
+        select {
+            font-family: var(--mono);
+            font-size: 14px;
+            color: var(--ink);
+            background: var(--bg);
+            border: 1px solid var(--rule);
+            border-radius: 6px;
+            padding: 5px 8px;
+            width: 100%
+        }
+
+        select {
+            font-family: var(--sans);
+            font-size: 15px;
+            padding: 7px 8px
+        }
+
+        input:focus-visible,
+        select:focus-visible,
+        button:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px
+        }
+
+        button {
+            font-family: var(--sans);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--accent);
+            background: var(--bg);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer
+        }
+
+        button:hover {
+            background: var(--sel)
+        }
+
+        .btns {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap
+        }
+
+        .result {
+            font-size: 19px;
+            line-height: 1.45;
+            margin: 0 0 6px;
+            max-width: none
+        }
+
+        .result b {
+            font-weight: 600;
+            font-variant-numeric: tabular-nums
+        }
+
+        .bad {
+            color: var(--bad)
+        }
+
+        .good {
+            color: var(--good)
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 15px
+        }
+
+        caption {
+            text-align: left
+        }
+
+        th,
+        td {
+            padding: 4px 10px 4px 0;
+            vertical-align: baseline;
+            text-align: left;
+            border-bottom: 1px solid var(--faint)
+        }
+
+        th {
+            font-weight: 600;
+            border-bottom: 1px solid var(--rule);
+            font-size: 14px
+        }
+
+        td.r,
+        th.r {
+            text-align: right;
+            padding-right: 0;
+            padding-left: 10px
+        }
+
+        td.r {
+            font-size: 15px;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap
+        }
+
+        td.c {
+            color: var(--muted);
+            font-size: 14px
+        }
+
+        tr.tot td {
+            border-top: 1px solid var(--ink);
+            font-weight: 600;
+            background: var(--faint)
+        }
+
+        tr.sel td {
+            background: var(--sel)
+        }
+
+        tr.pick {
+            cursor: pointer
+        }
+
+        tr.pick:hover td {
+            background: var(--faint)
+        }
+
+        .scroll {
+            overflow-x: auto
+        }
+
+        #cases td:first-child {
+            white-space: nowrap
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--accent);
+            margin: 2px 0 6px
+        }
+
+        .track {
+            position: relative;
+            display: inline-block;
+            width: 150px;
+            height: 12px;
+            background: var(--faint);
+            border-radius: 3px;
+            vertical-align: middle
+        }
+
+        .fill {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: var(--muted);
+            opacity: .7;
+            border-radius: 2px
+        }
+
+        .sel .fill {
+            background: var(--accent);
+            opacity: 1
+        }
+
+        .zl {
+            position: absolute;
+            top: -3px;
+            bottom: -3px;
+            width: 1px;
+            background: var(--ink)
+        }
+
+        svg {
+            width: 100%;
+            height: auto;
+            display: block
+        }
+
+        svg text {
+            font-family: var(--sans);
+            font-size: 11px;
+            fill: var(--muted)
+        }
+
+        .ax {
+            stroke: var(--rule);
+            stroke-width: 1
+        }
+
+        .zero {
+            stroke: var(--ink);
+            stroke-width: 1
+        }
+
+        .ln {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2.5
+        }
+
+        .rp {
+            stroke: var(--warn);
+            stroke-width: 1;
+            stroke-dasharray: 4 3
+        }
+
+        .note {
+            font-size: 14px;
+            color: var(--muted)
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <h1>Marina Electrification Planner</h1>
+        <p class="lead">Will electrifying a recreational marina in Funchal pay for itself? Pick a simulated case, change
+            the prices, and watch the result update. Savings come from PyPort simulations of the chosen case; prices and
+            the tariff are placeholders until supplier quotes and the EEM tariff arrive.</p>
+
+        <div class="cols">
+            <form onsubmit="return false" aria-label="Inputs">
+                <fieldset style="border-top:0;margin-top:0;padding-top:0">
+                    <label for="case" style="font-family:var(--serif);font-size:15px;color:var(--accent)">Simulated
+                        case</label>
+                    <select id="case"></select>
+                </fieldset>
+                <fieldset>
+                    <legend>Prices</legend>
+                    <div class="row"><label for="pvp">Solar<small>€ per Wp installed</small></label><input id="pvp"
+                            type="number" step="0.05" min="0" value="2.4"></div>
+                    <div class="row"><label for="bp">Battery<small>€ per kWh</small></label><input id="bp" type="number"
+                            step="10" min="0" value="650"></div>
+                    <div class="row"><label for="pvo">Solar upkeep<small>€ per Wp per year</small></label><input
+                            id="pvo" type="number" step="0.005" min="0" value="0.045"></div>
+                    <div class="row"><label for="bo">Battery upkeep<small>% of battery cost per
+                                year</small></label><input id="bo" type="number" step="0.25" min="0" value="2.25"></div>
+                </fieldset>
+                <fieldset>
+                    <legend>Energy</legend>
+                    <div class="row"><label for="mult">Savings multiplier<small>1 = default tariff</small></label><input
+                            id="mult" type="number" step="0.05" min="0" value="1"></div>
+                    <div class="row"><label for="xf">Price above <span id="thr">80</span> kW<small id="xfn">× the normal
+                                tariff</small></label><input id="xf" type="number" step="0.1" min="1" value="1"></div>
+                </fieldset>
+                <fieldset>
+                    <legend>Service</legend>
+                    <div class="row"><label for="tv">Value per recovered trip<small id="tvn">€ for each trip the plant
+                                lets you serve</small></label><input id="tv" type="number" step="5" min="0" value="0">
+                    </div>
+                </fieldset>
+                <fieldset>
+                    <legend>Finance</legend>
+                    <div class="row"><label for="dr">Discount rate<small>% per year</small></label><input id="dr"
+                            type="number" step="0.5" min="0.5" max="30" value="7"></div>
+                    <div class="row"><label for="hz">Horizon<small>years</small></label><input id="hz" type="number"
+                            step="1" min="5" max="40" value="20"></div>
+                </fieldset>
+                <fieldset>
+                    <legend>Battery ageing</legend>
+                    <div class="row"><label for="lm">Life vs simulated<small>1 = as simulated, max 15
+                                years</small></label><input id="lm" type="number" step="0.1" min="0.5" max="4"
+                            value="1"></div>
+                    <div class="row"><label for="dec">Price decline<small>% per year, for
+                                replacements</small></label><input id="dec" type="number" step="0.5" min="0" max="15"
+                            value="0"></div>
+                </fieldset>
+                <div class="btns">
+                    <button id="be" type="button">Set break-even prices</button>
+                    <button id="reset" type="button">Reset inputs</button>
+                </div>
+            </form>
+
+            <main style="min-width:0" aria-live="polite">
+                <section>
+                    <h2 id="ttl"></h2>
+                    <p class="result" id="verdict"></p>
+                    <p class="note" id="smart"></p>
+                </section>
+                <section>
+                    <h2>Statement</h2>
+                    <div class="scroll">
+                        <table id="stmt"></table>
+                    </div>
+                </section>
+                <section>
+                    <h2>Cash position by year</h2>
+                    <p class="note">Cumulative discounted cash flow. Dashed lines mark battery replacements.</p>
+                    <svg id="chart" viewBox="0 0 700 280" role="img"
+                        aria-label="Cumulative discounted cash flow by year"></svg>
+                </section>
+                <section>
+                    <h2>All simulated cases</h2>
+                    <p class="note">NPV at the inputs on the left. Click a row to load that case.</p>
+                    <div class="scroll">
+                        <table id="cases"></table>
+                    </div>
+                </section>
+                <section>
+                    <h2>Battery assumptions</h2>
+                    <div class="scroll">
+                        <table id="sens"></table>
+                    </div>
+                </section>
+                <section>
+                    <h2>Method</h2>
+                    <p class="note">Savings are what solar and battery add on top of smart charging: the weekly grid
+                        cost with the optimizer and no plant, minus the weekly cost with the plant. Four representative
+                        weeks (January, April, July, October 2025) stand for a full year, and every scenario serves all
+                        planned trips. Smart charging alone is reported separately because it costs nothing to adopt.
+                    </p>
+                    <p class="note">NPV, payback and battery replacements are computed as in the thesis code
+                        (economics/payback.py). Only the simulated cases are available, because the savings of a new
+                        plant size need a new simulation run.</p>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="cases.js"></script>
+    <script>
+        var CASES = (window.CASES_DATA || []).slice();
+        var DEF = { pvp: 2.4, bp: 650, pvo: 0.045, bo: 2.25, mult: 1, xf: 1, tv: 0, dr: 7, hz: 20, lm: 1, dec: 0 };
+        var CAL = 15, cur = null;
+        var $ = function (id) { return document.getElementById(id) };
+        var fmt = function (x) { var r = Math.round(x); return (r < 0 ? '−' : '') + Math.abs(r).toLocaleString('en-GB') };
+        var kEur = function (x) { if (Math.abs(x) < 1) return '0'; return (x < 0 ? '−' : '') + (Math.abs(x) / 1000).toFixed(Math.abs(x) >= 100000 ? 0 : 1) + 'k' };
+        var yrs = function (x) { return isFinite(x) ? x.toFixed(1) + ' years' : 'never' };
+
+        function val(id) { var v = parseFloat($(id).value); return isNaN(v) ? DEF[id] : v }
+        function inputs() {
+            return { pvp: val('pvp'), bp: val('bp'), pvo: val('pvo'), bo: val('bo') / 100, mult: val('mult'), xf: Math.max(val('xf'), 0), tv: Math.max(val('tv'), 0), dr: Math.max(val('dr'), 0.1) / 100, hz: Math.max(Math.round(val('hz')), 1), lm: val('lm'), dec: val('dec') / 100 };
+        }
+        function schedule(cost, life, hz, dec) {
+            var out = {}, k = 1, y;
+            if (life <= 0 || cost <= 0) return out;
+            for (; ; k++) { y = Math.ceil(k * life - 1e-9); if (y >= hz) break; out[y] = (out[y] || 0) + cost * Math.pow(1 - dec, y) }
+            return out;
+        }
+        // Trips served per year that the plant (td - ts) or smart charging (ts - tb) recovers, valued at p.tv each.
+        function tripGain(c, p) { return (p.tv && c.td != null) ? p.tv * (c.td - c.ts) * 365 / 7 : 0 }
+        function tripGainSmart(c, p) { return (p.tv && c.td != null) ? p.tv * (c.ts - c.tb) * 365 / 7 : 0 }
+        function calc(c, p, o) {
+            o = o || {};
+            var life = o.never ? 0 : (c.b > 0 ? Math.min(CAL, c.life * (o.lm || p.lm)) : 0);
+            var dec = o.dec != null ? o.dec : p.dec;
+            var solarCost = c.pv * 1000 * p.pvp, bessCost = c.b * p.bp, capex = solarCost + bessCost;
+            var opexPv = c.pv * 1000 * p.pvo, opexB = bessCost * p.bo, opex = opexPv + opexB;
+            var trip = tripGain(c, p), sav = (c.sav + (c.xsav != null ? (p.xf - 1) * c.xsav : 0)) * p.mult + trip, net = sav - opex;
+            var ann = (1 - Math.pow(1 + p.dr, -p.hz)) / p.dr;
+            var rep = schedule(bessCost, life, p.hz, dec), repPV = 0, n = 0;
+            for (var y in rep) { repPV += rep[y] / Math.pow(1 + p.dr, +y); n++ }
+            var npv = net * ann - capex - repPV;
+            var simple = net > 0 ? capex / net : Infinity;
+            var ext = schedule(bessCost, life, p.hz + 10, dec), cum = -capex, prev = cum, disc = Infinity;
+            for (var t = 1; t <= p.hz + 10; t++) {
+                cum += net / Math.pow(1 + p.dr, t) - (ext[t] || 0) / Math.pow(1 + p.dr, t);
+                if (cum >= 0 && prev < 0) { disc = t - 1 + (-prev) / (cum - prev); break }
+                prev = cum;
+            }
+            if (capex === 0) disc = 0;
+            var need = sav > 0 ? ((((capex + repPV) / ann) + opex) / sav) : Infinity;
+            return { trip: trip, solarCost: solarCost, bessCost: bessCost, capex: capex, opexPv: opexPv, opexB: opexB, opex: opex, sav: sav, net: net, ann: ann, npv: npv, pvNet: net * ann, rep: rep, repPV: repPV, nrep: n, life: life, simple: simple, disc: disc, need: need };
+        }
+        function breakEven(c, p) {
+            function f(s) { var q = {}; for (var k in p) q[k] = p[k]; q.pvp = p.pvp * s; q.bp = p.bp * s; return calc(c, q).npv }
+            if (f(0) < 0) return null;
+            var lo = 0, hi = 1; while (f(hi) > 0 && hi < 50) hi *= 2;
+            for (var i = 0; i < 50; i++) { var m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m }
+            return (lo + hi) / 2;
+        }
+        function cumSeries(c, p) {
+            var r = calc(c, p), pts = [[0, -r.capex]], cum = -r.capex;
+            for (var t = 1; t <= p.hz; t++) { cum += r.net / Math.pow(1 + p.dr, t) - (r.rep[t] || 0) / Math.pow(1 + p.dr, t); pts.push([t, cum]) }
+            return { pts: pts, rep: r.rep };
+        }
+        function savOf(c, p) { return (c.sav + (c.xsav != null ? (p.xf - 1) * c.xsav : 0)) * p.mult + tripGain(c, p) }
+        function smartOf(c, p) { return (c.smart + (c.xsmart != null ? (p.xf - 1) * c.xsmart : 0)) * p.mult + tripGainSmart(c, p) }
+        function tr(cells, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + cells + '</tr>' }
+        function render() {
+            var p = inputs(), r = calc(cur, p), be = breakEven(cur, p), pos = r.npv >= 0;
+            $('ttl').textContent = cur.name;
+            $('thr').textContent = cur.thr || 80;
+            $('xfn').textContent = cur.xsav == null ? 'no data for this case: has no effect' : '× the normal tariff';
+            $('tvn').textContent = cur.td == null ? 'no trip data for this case: has no effect' : (cur.td - cur.ts > 0.01 ? '€ for each trip the plant lets you serve' : 'this case loses no trips: has no effect');
+            $('verdict').innerHTML = 'Net present value <b class="' + (pos ? 'good' : 'bad') + '">' + fmt(r.npv) + ' €</b> over ' + p.hz + ' years at ' + (p.dr * 100).toFixed(1).replace(/\.0$/, '') + ' %. ' + (pos ? 'The investment repays within the horizon.' : 'The investment does not repay within the horizon.');
+            $('smart').textContent = 'Smart charging alone, with no investment, saves about ' + fmt(smartOf(cur, p)) + ' € a year over charging on arrival (' + cur.boats + ' boats). That saving is already in the reference and is not credited to the plant.' + (cur.td != null && cur.asg ? ' Trips served per week out of ' + cur.asg.toFixed(0) + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + ': ' + cur.tb.toFixed(1) + ' charging on arrival, ' + cur.ts.toFixed(1) + ' with smart charging, ' + cur.td.toFixed(1) + ' with the plant.' : '');
+            var s = '<tr><th>Line</th><th>Calculation</th><th class="r">€</th></tr>';
+            s += tr('<td>Solar</td><td class="c">' + cur.pv + ' kWp × ' + p.pvp.toFixed(2) + ' €/Wp</td><td class="r">' + fmt(r.solarCost) + '</td>');
+            s += tr('<td>Battery</td><td class="c">' + cur.b + ' kWh × ' + fmt(p.bp) + ' €/kWh</td><td class="r">' + fmt(r.bessCost) + '</td>');
+            s += tr('<td>Purchase</td><td class="c"></td><td class="r">' + fmt(r.capex) + '</td>', 'tot');
+            s += tr('<td>Energy savings per year</td><td class="c">scheduled baseline − plant</td><td class="r">' + fmt(r.sav - r.trip) + '</td>');
+            if (r.trip) s += tr('<td>Recovered trips per year</td><td class="c">' + ((cur.td - cur.ts) * 365 / 7).toFixed(0) + ' trips × ' + fmt(p.tv) + ' €</td><td class="r">' + fmt(r.trip) + '</td>');
+            s += tr('<td>Solar upkeep per year</td><td class="c">' + cur.pv + ' kWp × ' + p.pvo.toFixed(3) + ' €/Wp</td><td class="r">' + fmt(-r.opexPv) + '</td>');
+            s += tr('<td>Battery upkeep per year</td><td class="c">' + (p.bo * 100).toFixed(2) + ' % of battery cost</td><td class="r">' + fmt(-r.opexB) + '</td>');
+            s += tr('<td>Net per year</td><td class="c"></td><td class="r">' + fmt(r.net) + '</td>', 'tot');
+            s += tr('<td>Net over ' + p.hz + ' years, discounted</td><td class="c">' + fmt(r.net) + ' × ' + r.ann.toFixed(3) + '</td><td class="r">' + fmt(r.pvNet) + '</td>');
+            s += tr('<td>Battery replacements</td><td class="c">' + r.nrep + (r.nrep === 1 ? ' replacement' : ' replacements') + (cur.b > 0 ? ', battery life ' + r.life.toFixed(1) + ' years' : '') + ', in today’s money</td><td class="r">' + fmt(-r.repPV) + '</td>');
+            s += tr('<td>Purchase</td><td class="c"></td><td class="r">' + fmt(-r.capex) + '</td>');
+            s += tr('<td>Net present value</td><td class="c"></td><td class="r">' + fmt(r.npv) + '</td>', 'tot');
+            s += tr('<td>Simple payback</td><td class="c">purchase ÷ net per year</td><td class="r">' + yrs(r.simple) + '</td>');
+            s += tr('<td>Discounted payback</td><td class="c">with battery replacements</td><td class="r">' + yrs(r.disc) + '</td>');
+            s += tr('<td>Savings needed to break even</td><td class="c">multiple of the simulated savings</td><td class="r">' + (isFinite(r.need) ? '× ' + r.need.toFixed(1) : '—') + '</td>');
+            var gain = cur.td != null ? (cur.td - cur.ts) * 365 / 7 : 0, n0 = calc(cur, Object.assign({}, p, { tv: 0 })).npv, n1 = calc(cur, Object.assign({}, p, { tv: 100 })).npv;
+            if (gain > 0.5) s += tr('<td>Value per recovered trip to break even</td><td class="c">' + gain.toFixed(0) + ' trips a year recovered</td><td class="r">' + (n0 >= 0 ? 'already positive' : fmt(-n0 * 100 / (n1 - n0)) + ' €') + '</td>');
+            s += tr('<td>Break-even prices</td><td class="c">solar and battery scaled together</td><td class="r">' + (be ? (p.pvp * be).toFixed(2) + ' €/Wp' + (cur.b > 0 ? ' · ' + fmt(p.bp * be) + ' €/kWh' : '') : 'none: upkeep exceeds savings') + '</td>');
+            $('stmt').innerHTML = s;
+            drawChart(p, r); drawCases(p); drawSens(p);
+        }
+        function drawChart(p) {
+            var s = cumSeries(cur, p), W = 700, H = 280, L = 52, R = 14, T = 14, B = 30;
+            var ys = s.pts.map(function (a) { return a[1] }), mn = Math.min.apply(null, ys.concat([0])), mx = Math.max.apply(null, ys.concat([0]));
+            if (mx - mn < 1) mx = mn + 1;
+            var pad = (mx - mn) * 0.06; mn -= pad; mx += pad;
+            var X = function (t) { return L + (W - L - R) * t / p.hz }, Y = function (v) { return T + (H - T - B) * (1 - (v - mn) / (mx - mn)) };
+            var step = Math.pow(10, Math.floor(Math.log10((mx - mn) / 4))), m = (mx - mn) / 4 / step; step *= m > 5 ? 10 : m > 2 ? 5 : m > 1 ? 2 : 1;
+            var g = '', v, t;
+            for (v = Math.ceil(mn / step) * step; v <= mx; v += step) { g += '<line class="ax" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/><text x="' + (L - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + kEur(v) + '</text>' }
+            for (t = 0; t <= p.hz; t += (p.hz > 16 ? 5 : p.hz > 10 ? 2 : 1))g += '<text x="' + X(t) + '" y="' + (H - 10) + '" text-anchor="middle">' + t + '</text>';
+            g += '<text x="' + (W - R) + '" y="' + (H - 0) + '" text-anchor="end">year</text>';
+            g += '<line class="zero" x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0) + '" y2="' + Y(0) + '"/>';
+            for (var y in s.rep) g += '<line class="rp" x1="' + X(+y) + '" x2="' + X(+y) + '" y1="' + T + '" y2="' + (H - B) + '"/><text x="' + (X(+y) + 4) + '" y="' + (T + 10) + '">battery, year ' + y + '</text>';
+            g += '<polyline class="ln" points="' + s.pts.map(function (a) { return X(a[0]).toFixed(1) + ',' + Y(a[1]).toFixed(1) }).join(' ') + '"/>';
+            var e = s.pts[s.pts.length - 1];
+            g += '<text x="' + (W - R) + '" y="' + (Y(e[1]) + (e[1] < 0 ? -8 : 16)) + '" text-anchor="end" style="fill:var(--ink)">' + fmt(e[1]) + ' €</text>';
+            $('chart').innerHTML = g;
+        }
+        function drawCases(p) {
+            var rows = CASES.map(function (c) { return { c: c, r: calc(c, p) } });
+            var vals = rows.map(function (x) { return x.r.npv }), lo = Math.min.apply(null, vals.concat([0])), hi = Math.max.apply(null, vals.concat([0])), span = (hi - lo) || 1, zp = (0 - lo) / span * 100;
+            var h = '<tr><th>Case</th><th class="r">Savings €/yr</th><th class="r">Smart charging €/yr</th><th class="r">Battery life</th><th class="r">NPV €</th><th class="r"></th></tr>';
+            rows.forEach(function (x) {
+                var a = (Math.min(x.r.npv, 0) - lo) / span * 100, b2 = (Math.max(x.r.npv, 0) - lo) / span * 100;
+                h += '<tr class="pick' + (x.c === cur ? ' sel' : '') + '" data-id="' + x.c.id + '" tabindex="0"><td>' + x.c.name + '</td><td class="r">' + fmt(savOf(x.c, p)) + '</td><td class="r">' + fmt(smartOf(x.c, p)) + '</td><td class="r">' + (x.c.b > 0 ? x.c.life.toFixed(1) + ' y' : '—') + '</td><td class="r">' + fmt(x.r.npv) + '</td><td class="r"><span class="track"><span class="fill" style="left:' + a + '%;width:' + Math.max(b2 - a, 0.8) + '%"></span><span class="zl" style="left:' + zp + '%"></span></span></td></tr>';
+            });
+            $('cases').innerHTML = h;
+            Array.prototype.forEach.call($('cases').querySelectorAll('tr.pick'), function (el) {
+                el.onclick = function () { select(el.getAttribute('data-id')) };
+                el.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(el.getAttribute('data-id')) } };
+            });
+        }
+        function drawSens(p) {
+            if (cur.b === 0) { $('sens').innerHTML = '<tr><td class="c">This case has no battery, so battery assumptions do not apply.</td></tr>'; return }
+            var rows = [['Simulated life, constant price', {}], ['Battery lasts twice as long', { lm: p.lm * 2 }], ['Battery price falls 3.5 % a year', { dec: 0.035 }], ['Twice as long and 3.5 % a year', { lm: p.lm * 2, dec: 0.035 }], ['Battery never replaced', { never: true }]];
+            var h = '<tr><th>Assumption</th><th class="r">NPV €</th><th class="r">Replacements</th><th class="r">Discounted payback</th></tr>';
+            rows.forEach(function (x) { var r = calc(cur, p, x[1]); h += tr('<td>' + x[0] + '</td><td class="r">' + fmt(r.npv) + '</td><td class="r">' + r.nrep + '</td><td class="r">' + yrs(r.disc) + '</td>') });
+            $('sens').innerHTML = h;
+        }
+        function select(id) {
+            cur = CASES.filter(function (c) { return c.id === id })[0] || CASES[0];
+            $('case').value = cur.id; render();
+            try { history.replaceState(null, '', '#' + cur.id.replace(/_/g, '-')) } catch (e) { }
+        }
+        (function init() {
+            if (!CASES.length) { document.querySelector('main').innerHTML = '<h2>No data</h2><p>cases.js is missing. Run: python export_dashboard_data.py garmin_seasons3.csv size_*.csv</p>'; return }
+            var groups = {}, sel = $('case');
+            CASES.forEach(function (c) {
+                if (!groups[c.g]) { groups[c.g] = document.createElement('optgroup'); groups[c.g].label = c.g; sel.appendChild(groups[c.g]) }
+                var o = document.createElement('option'); o.value = c.id; o.textContent = c.name; groups[c.g].appendChild(o);
+            });
+            var RANGE = { pvp: [0.1, 3.5], bp: [20, 900], pvo: [0, 0.06], bo: [0, 4], mult: [0.5, 3], xf: [1, 5], tv: [0, 500], dr: [3, 12], hz: [10, 25], lm: [1, 3], dec: [0, 6] };
+            Object.keys(RANGE).forEach(function (id) {
+                var n = $(id), r = document.createElement('input');
+                r.type = 'range'; r.min = RANGE[id][0]; r.max = RANGE[id][1]; r.step = n.step; r.value = n.value; r.id = id + '_r';
+                r.setAttribute('aria-label', n.parentNode.querySelector('label').firstChild.textContent + ' slider');
+                n.parentNode.insertAdjacentElement('afterend', r);
+                r.oninput = function () { n.value = r.value; render() };
+                n.addEventListener('input', function () { r.value = n.value });
+            });
+            sel.onchange = function () { select(sel.value) };
+            ['pvp', 'bp', 'pvo', 'bo', 'mult', 'xf', 'tv', 'dr', 'hz', 'lm', 'dec'].forEach(function (id) { $(id).oninput = render });
+            $('reset').onclick = function () { for (var k in DEF) { $(k).value = DEF[k]; $(k + '_r').value = DEF[k] } render() };
+            $('be').onclick = function () {
+                var p = inputs(), be = breakEven(cur, p); if (!be) return;
+                $('pvp').value = (Math.floor(p.pvp * be / 0.01) * 0.01).toFixed(2);
+                $('bp').value = Math.floor(p.bp * be);
+                $('pvp_r').value = $('pvp').value; $('bp_r').value = $('bp').value;
+                render();
+            };
+            var h = (location.hash || '').slice(1).replace(/-/g, '_');
+            var base = CASES.filter(function (c) { return c.boats === 4 && c.pv === 100 && c.b === 200 })[0] || CASES[0];
+            select(CASES.some(function (c) { return c.id === h }) ? h : base.id);
+        })();
+    </script>
+</body>
+
+</html>
