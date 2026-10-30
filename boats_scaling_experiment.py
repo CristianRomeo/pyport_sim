@@ -471,7 +471,8 @@ def main():
         daily_savings = weekly_savings / 7.0
 
         evse_units = n if args.include_charger_capex else 0
-        capex = CapexBreakdown(bess_kwh=BESS_KWH, pv_wp=PV_KW * 1000, evse_units=evse_units)
+        capex = CapexBreakdown(bess_kwh=BESS_KWH, bess_kw=BESS_KW if BESS_KWH > 0 else 0.0,
+                               pv_wp=PV_KW * 1000, evse_units=evse_units)
         opex = OpexBreakdown(bess_capex=BESS_KWH * capex.bess_eur_per_kwh,
                               pv_wp=PV_KW * 1000, evse_units=evse_units)
 
@@ -513,6 +514,7 @@ def main():
             "num_boats": n,
             "pv_kwp": PV_KW,
             "bess_kwh": BESS_KWH,
+            "bess_kw": BESS_KW if BESS_KWH > 0 else 0.0,
             "contracted_power_kw": round(contracted_power, 1),
             "excess_threshold_kw": args.excess_threshold_kw,
             "excess_factor": args.excess_factor,
