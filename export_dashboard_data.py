@@ -20,6 +20,10 @@ Each CSV row written by garmin_scaling_experiment.py becomes one case:
           boats x charger kW (--charger-kw, default 50) makes a separate case,
           named "... · 80 kW cap"; the same boats + plant at different caps are
           different cases.
+  bkw   = bess_kw (battery charge/discharge power, kW). A power different from
+          the default (the smaller of 50 kW and a quarter of the kWh) makes a
+          separate case, named "... · 100 kW battery". Runs from before the
+          column existed are read as the default power.
   tb / ts / td = trips served per week without plant and without smart
           charging (tb), with smart charging only (ts), with the plant (td);
           asg = trips assigned per week. The dashboard values the trips the
@@ -57,7 +61,9 @@ def parse_row(r):
     trips = [r.get(k) for k in ("baseline_trips_served", "scheduled_trips_served", "der_trips_served")]
     trips = [float(t) for t in trips] if all(t not in (None, "") for t in trips) else [None] * 3
     asg = r.get("assigned_trips_week")
-    return (boats, pv, bess, cap), {
+    default_kw = min(50.0, bess / 4.0) if bess > 0 else 0.0
+    bkw = float(r.get("bess_kw") or default_kw) if bess > 0 else 0.0
+    return (boats, pv, bess, cap, bkw), {
         "boats": boats,
         "pv": round(pv),
         "b": round(bess),
@@ -67,6 +73,7 @@ def parse_row(r):
         "xsmart": xsmart,
         "thr": float(r.get("excess_threshold_kw") or 80),
         "cap": round(cap),
+        "bkw": round(bkw),
         "tb": trips[0], "ts": trips[1], "td": trips[2],
         "asg": float(asg) if asg not in (None, "") else None,
         "life": float(r.get("bess_life_years") or 0) if bess > 0 else 0.0,
@@ -109,6 +116,10 @@ def capped(c):
     return c["cap"] > 0 and c["cap"] < c["boats"] * CHARGER_KW - 1e-6
 
 
+def custom_power(c):
+    return c["b"] > 0 and abs(c["bkw"] - min(50.0, c["b"] / 4.0)) > 0.5
+
+
 def label(c):
     parts = []
     if c["pv"] > 0:
@@ -122,7 +133,8 @@ def label(c):
     elif c["pv"] == 0:
         only = " only"
     cap = f' · {c["cap"]} kW cap' if capped(c) else ""
-    return f'{c["boats"]} boats · {plant}{only}{cap}'
+    power = f' · {c["bkw"]} kW battery' if custom_power(c) else ""
+    return f'{c["boats"]} boats · {plant}{only}{power}{cap}'
 
 
 def main():
@@ -139,10 +151,10 @@ def main():
     global CHARGER_KW
     CHARGER_KW = args.charger_kw
     cases = read_rows(paths, args.average)
-    cases.sort(key=lambda c: (c["boats"], c["pv"], c["b"], -c["cap"]))
+    cases.sort(key=lambda c: (c["boats"], c["pv"], c["b"], c["bkw"], -c["cap"]))
     for c in cases:
         c["name"] = label(c)
-        c["id"] = f'b{c["boats"]}_pv{c["pv"]}_b{c["b"]}' + (f'_cap{c["cap"]}' if capped(c) else "")
+        c["id"] = f'b{c["boats"]}_pv{c["pv"]}_b{c["b"]}' + (f'_p{c["bkw"]}' if custom_power(c) else "") + (f'_cap{c["cap"]}' if capped(c) else "")
         c["g"] = f'{c["boats"]} boats'
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:

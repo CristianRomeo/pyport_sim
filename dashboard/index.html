@@ -399,6 +399,8 @@
                             type="number" step="0.05" min="0" value="2.4"></div>
                     <div class="row"><label for="bp">Battery<small>€ per kWh</small></label><input id="bp" type="number"
                             step="10" min="0" value="650"></div>
+                    <div class="row"><label for="kp">Battery power<small>€ per kW above 1 kW per 4
+                                kWh</small></label><input id="kp" type="number" step="10" min="0" value="100"></div>
                     <div class="row"><label for="pvo">Solar upkeep<small>€ per Wp per year</small></label><input
                             id="pvo" type="number" step="0.005" min="0" value="0.045"></div>
                     <div class="row"><label for="bo">Battery upkeep<small>% of battery cost per
@@ -488,7 +490,7 @@
     <script src="cases.js"></script>
     <script>
         var CASES = (window.CASES_DATA || []).slice();
-        var DEF = { pvp: 2.4, bp: 650, pvo: 0.045, bo: 2.25, mult: 1, xf: 1, tv: 0, dr: 7, hz: 20, lm: 1, dec: 0 };
+        var DEF = { pvp: 2.4, bp: 650, kp: 100, pvo: 0.045, bo: 2.25, mult: 1, xf: 1, tv: 0, dr: 7, hz: 20, lm: 1, dec: 0 };
         var CAL = 15, cur = null;
         var $ = function (id) { return document.getElementById(id) };
         var fmt = function (x) { var r = Math.round(x); return (r < 0 ? '−' : '') + Math.abs(r).toLocaleString('en-GB') };
@@ -497,7 +499,7 @@
 
         function val(id) { var v = parseFloat($(id).value); return isNaN(v) ? DEF[id] : v }
         function inputs() {
-            return { pvp: val('pvp'), bp: val('bp'), pvo: val('pvo'), bo: val('bo') / 100, mult: val('mult'), xf: Math.max(val('xf'), 0), tv: Math.max(val('tv'), 0), dr: Math.max(val('dr'), 0.1) / 100, hz: Math.max(Math.round(val('hz')), 1), lm: val('lm'), dec: val('dec') / 100 };
+            return { pvp: val('pvp'), bp: val('bp'), kp: Math.max(val('kp'), 0), pvo: val('pvo'), bo: val('bo') / 100, mult: val('mult'), xf: Math.max(val('xf'), 0), tv: Math.max(val('tv'), 0), dr: Math.max(val('dr'), 0.1) / 100, hz: Math.max(Math.round(val('hz')), 1), lm: val('lm'), dec: val('dec') / 100 };
         }
         function schedule(cost, life, hz, dec) {
             var out = {}, k = 1, y;
@@ -508,11 +510,13 @@
         // Trips served per year that the plant (td - ts) or smart charging (ts - tb) recovers, valued at p.tv each.
         function tripGain(c, p) { return (p.tv && c.td != null) ? p.tv * (c.td - c.ts) * 365 / 7 : 0 }
         function tripGainSmart(c, p) { return (p.tv && c.td != null) ? p.tv * (c.ts - c.tb) * 365 / 7 : 0 }
+        // Battery power above the 4-hour reference (0.25 kW per kWh, included in the EUR/kWh price) costs p.kp EUR per kW.
+        function extraKw(c) { var d = Math.min(50, c.b / 4), k = c.bkw != null ? c.bkw : d; return c.b > 0 ? Math.max(0, k - c.b / 4) : 0 }
         function calc(c, p, o) {
             o = o || {};
             var life = o.never ? 0 : (c.b > 0 ? Math.min(CAL, c.life * (o.lm || p.lm)) : 0);
             var dec = o.dec != null ? o.dec : p.dec;
-            var solarCost = c.pv * 1000 * p.pvp, bessCost = c.b * p.bp, capex = solarCost + bessCost;
+            var solarCost = c.pv * 1000 * p.pvp, bessCost = c.b * p.bp, powerCost = extraKw(c) * p.kp, capex = solarCost + bessCost + powerCost;
             var opexPv = c.pv * 1000 * p.pvo, opexB = bessCost * p.bo, opex = opexPv + opexB;
             var trip = tripGain(c, p), sav = (c.sav + (c.xsav != null ? (p.xf - 1) * c.xsav : 0)) * p.mult + trip, net = sav - opex;
             var ann = (1 - Math.pow(1 + p.dr, -p.hz)) / p.dr;
@@ -528,10 +532,10 @@
             }
             if (capex === 0) disc = 0;
             var need = sav > 0 ? ((((capex + repPV) / ann) + opex) / sav) : Infinity;
-            return { trip: trip, solarCost: solarCost, bessCost: bessCost, capex: capex, opexPv: opexPv, opexB: opexB, opex: opex, sav: sav, net: net, ann: ann, npv: npv, pvNet: net * ann, rep: rep, repPV: repPV, nrep: n, life: life, simple: simple, disc: disc, need: need };
+            return { trip: trip, powerCost: powerCost, solarCost: solarCost, bessCost: bessCost, capex: capex, opexPv: opexPv, opexB: opexB, opex: opex, sav: sav, net: net, ann: ann, npv: npv, pvNet: net * ann, rep: rep, repPV: repPV, nrep: n, life: life, simple: simple, disc: disc, need: need };
         }
         function breakEven(c, p) {
-            function f(s) { var q = {}; for (var k in p) q[k] = p[k]; q.pvp = p.pvp * s; q.bp = p.bp * s; return calc(c, q).npv }
+            function f(s) { var q = {}; for (var k in p) q[k] = p[k]; q.pvp = p.pvp * s; q.bp = p.bp * s; q.kp = p.kp * s; return calc(c, q).npv }
             if (f(0) < 0) return null;
             var lo = 0, hi = 1; while (f(hi) > 0 && hi < 50) hi *= 2;
             for (var i = 0; i < 50; i++) { var m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m }
@@ -556,6 +560,7 @@
             var s = '<tr><th>Line</th><th>Calculation</th><th class="r">€</th></tr>';
             s += tr('<td>Solar</td><td class="c">' + cur.pv + ' kWp × ' + p.pvp.toFixed(2) + ' €/Wp</td><td class="r">' + fmt(r.solarCost) + '</td>');
             s += tr('<td>Battery</td><td class="c">' + cur.b + ' kWh × ' + fmt(p.bp) + ' €/kWh</td><td class="r">' + fmt(r.bessCost) + '</td>');
+            if (r.powerCost) s += tr('<td>Battery power</td><td class="c">' + extraKw(cur).toFixed(0) + ' kW above the reference × ' + fmt(p.kp) + ' €/kW</td><td class="r">' + fmt(r.powerCost) + '</td>');
             s += tr('<td>Purchase</td><td class="c"></td><td class="r">' + fmt(r.capex) + '</td>', 'tot');
             s += tr('<td>Energy savings per year</td><td class="c">scheduled baseline − plant</td><td class="r">' + fmt(r.sav - r.trip) + '</td>');
             if (r.trip) s += tr('<td>Recovered trips per year</td><td class="c">' + ((cur.td - cur.ts) * 365 / 7).toFixed(0) + ' trips × ' + fmt(p.tv) + ' €</td><td class="r">' + fmt(r.trip) + '</td>');
@@ -626,7 +631,7 @@
                 if (!groups[c.g]) { groups[c.g] = document.createElement('optgroup'); groups[c.g].label = c.g; sel.appendChild(groups[c.g]) }
                 var o = document.createElement('option'); o.value = c.id; o.textContent = c.name; groups[c.g].appendChild(o);
             });
-            var RANGE = { pvp: [0.1, 3.5], bp: [20, 900], pvo: [0, 0.06], bo: [0, 4], mult: [0.5, 3], xf: [1, 5], tv: [0, 500], dr: [3, 12], hz: [10, 25], lm: [1, 3], dec: [0, 6] };
+            var RANGE = { pvp: [0.1, 3.5], bp: [20, 900], kp: [0, 300], pvo: [0, 0.06], bo: [0, 4], mult: [0.5, 3], xf: [1, 5], tv: [0, 500], dr: [3, 12], hz: [10, 25], lm: [1, 3], dec: [0, 6] };
             Object.keys(RANGE).forEach(function (id) {
                 var n = $(id), r = document.createElement('input');
                 r.type = 'range'; r.min = RANGE[id][0]; r.max = RANGE[id][1]; r.step = n.step; r.value = n.value; r.id = id + '_r';
@@ -636,13 +641,14 @@
                 n.addEventListener('input', function () { r.value = n.value });
             });
             sel.onchange = function () { select(sel.value) };
-            ['pvp', 'bp', 'pvo', 'bo', 'mult', 'xf', 'tv', 'dr', 'hz', 'lm', 'dec'].forEach(function (id) { $(id).oninput = render });
+            ['pvp', 'bp', 'kp', 'pvo', 'bo', 'mult', 'xf', 'tv', 'dr', 'hz', 'lm', 'dec'].forEach(function (id) { $(id).oninput = render });
             $('reset').onclick = function () { for (var k in DEF) { $(k).value = DEF[k]; $(k + '_r').value = DEF[k] } render() };
             $('be').onclick = function () {
                 var p = inputs(), be = breakEven(cur, p); if (!be) return;
                 $('pvp').value = (Math.floor(p.pvp * be / 0.01) * 0.01).toFixed(2);
                 $('bp').value = Math.floor(p.bp * be);
-                $('pvp_r').value = $('pvp').value; $('bp_r').value = $('bp').value;
+                $('kp').value = Math.floor(p.kp * be);
+                $('pvp_r').value = $('pvp').value; $('bp_r').value = $('bp').value; $('kp_r').value = $('kp').value;
                 render();
             };
             var h = (location.hash || '').slice(1).replace(/-/g, '_');
