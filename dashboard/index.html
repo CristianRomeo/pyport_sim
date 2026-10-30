@@ -476,8 +476,12 @@
                     <h2>Method</h2>
                     <p class="note">Savings are what solar and battery add on top of smart charging: the weekly grid
                         cost with the optimizer and no plant, minus the weekly cost with the plant. Four representative
-                        weeks (January, April, July, October 2025) stand for a full year, and every scenario serves all
-                        planned trips. Smart charging alone is reported separately because it costs nothing to adopt.
+                        weeks (January, April, July, October 2025) stand for a full year. Without a grid cap every
+                        scenario
+                        serves all planned trips. In a capped case (80, 120 or 150 kW) trips the grid limit does not
+                        allow are lost: the plant recovers some of them, and the Service slider puts a value on each
+                        recovered trip. Battery power above a quarter of its kWh is charged separately. Smart charging
+                        alone is reported separately because it costs nothing to adopt.
                     </p>
                     <p class="note">NPV, payback and battery replacements are computed as in the thesis code
                         (economics/payback.py). Only the simulated cases are available, because the savings of a new
