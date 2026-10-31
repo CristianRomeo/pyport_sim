@@ -188,7 +188,7 @@ class PortForecaster:
                 break
             t_dep = start_times[i]
             t_dep_end = t_dep + timedelta(seconds=trip.duration)
-            if i + 1 < len(start_times):
+            if i + 1 < min(len(start_times), len(trips)):
                 if t_dep_end <= timestamp < start_times[i + 1]:
                     return True
             else:
