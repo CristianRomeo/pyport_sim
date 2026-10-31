@@ -104,6 +104,7 @@ import contextlib
 import csv
 import io
 import os
+import random
 import re
 import sys
 from pathlib import Path
@@ -172,6 +173,15 @@ BOAT_SPEC = dict(motor_power=120, weight=2500, length=8.5,
 # the same fixed grid limit is used for every fleet size, e.g. 80 kW to test a
 # power cap. None (default) keeps the supervisor's rule above.
 GRID_LIMIT_KW = None
+
+# SEED (set by --seed): when given, the trip assignment is seeded from the seed,
+# the season and the fleet size just before every scenario, so the baseline,
+# the scheduled baseline and the DER scenario of one week get the SAME trips
+# (a paired comparison: the savings no longer carry the noise of different route
+# draws), and runs with the same seed but a different plant or grid limit are
+# paired too. None (default) keeps the old behaviour: a fresh random draw for
+# every scenario.
+SEED = None
 
 
 def contracted_power_for(num_boats: int) -> float:
@@ -303,6 +313,9 @@ def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
     db_manager.initialize_schema()
     db_manager.initialize_default_metrics()
 
+    if SEED is not None:
+        random.seed(f"{SEED}-{season}-{num_boats}")
+
     sim = SimulationEngine(
         port=port, settings=settings, db_manager=db_manager,
         start_date=start_date or START_DATE, days=14,  # capped to 7 by the engine
@@ -332,7 +345,7 @@ def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
 
 
 def main():
-    global PV_KW, BESS_KWH, BESS_KW, GRID_LIMIT_KW
+    global PV_KW, BESS_KWH, BESS_KW, GRID_LIMIT_KW, SEED
     parser = argparse.ArgumentParser(description="Boat-count scaling sensitivity for a fixed PV+BESS install")
     parser.add_argument("--boat-counts", type=int, nargs="+", default=[2, 3, 4, 5, 6, 8, 10],
                          help="Boat/charger counts to test (default: 2 3 4 5 6 8 10)")
@@ -372,6 +385,10 @@ def main():
                          help="EXPERIMENT: fixed grid-import limit in kW for every fleet size "
                               "(default: boats x charger kW). A limit below the charging demand "
                               "makes the optimizer spread or skip charging, so check service level")
+    parser.add_argument("--seed", type=int, default=None,
+                         help="seed the trip assignment (per season and fleet size) so all scenarios of "
+                              "a week get the same trips and a run can be repeated exactly. "
+                              "Default: unseeded, a different draw every time")
     parser.add_argument("--out-csv", default="boats_scaling_results.csv")
     args = parser.parse_args()
     if args.bess_decline_case:
@@ -380,6 +397,7 @@ def main():
         args.bess_price_decline = bess_price_decline_for_case(args.bess_decline_case)
 
     GRID_LIMIT_KW = args.grid_limit_kw
+    SEED = args.seed
     PV_KW = args.pv_kwp
     BESS_KWH = args.bess_kwh
     BESS_KW = args.bess_kw if args.bess_kw is not None else min(50.0, BESS_KWH / 4.0)
@@ -516,6 +534,7 @@ def main():
             "bess_kwh": BESS_KWH,
             "bess_kw": BESS_KW if BESS_KWH > 0 else 0.0,
             "contracted_power_kw": round(contracted_power, 1),
+            "seed": "" if args.seed is None else args.seed,
             "excess_threshold_kw": args.excess_threshold_kw,
             "excess_factor": args.excess_factor,
             "baseline_excess_eur_week": round(exc_eur["base"] / year_weeks, 2),
