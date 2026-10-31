@@ -113,7 +113,7 @@ CHARGER_KW = 50.0
 
 
 def capped(c):
-    return c["cap"] > 0 and c["cap"] < c["boats"] * CHARGER_KW - 1e-6
+    return c["cap"] > 0 and abs(c["cap"] - c["boats"] * CHARGER_KW) > 1e-6
 
 
 def custom_power(c):
