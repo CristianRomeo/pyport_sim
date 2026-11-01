@@ -461,7 +461,7 @@
                 </section>
                 <section>
                     <h2>All simulated cases</h2>
-                    <p class="note">NPV at the inputs on the left. Click a row to load that case.</p>
+                    <p class="note">NPV at the inputs on the left: the plant against smart charging, and with smart charging added (against charging on arrival). Click a row to load that case.</p>
                     <div class="scroll">
                         <table id="cases"></table>
                     </div>
@@ -551,6 +551,8 @@
             return { pts: pts, rep: r.rep };
         }
         function savOf(c, p) { return (c.sav + (c.xsav != null ? (p.xf - 1) * c.xsav : 0)) * p.mult + tripGain(c, p) }
+        // NPV of the whole package (smart charging + plant) against charging on arrival: smart charging needs no purchase, so its yearly saving is added to the plant's net.
+        function pkgNpv(c, p, r) { return r.npv + r.ann * smartOf(c, p) }
         function smartOf(c, p) { return (c.smart + (c.xsmart != null ? (p.xf - 1) * c.xsmart : 0)) * p.mult + tripGainSmart(c, p) }
         function tr(cells, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + cells + '</tr>' }
         function render() {
@@ -560,7 +562,7 @@
             $('xfn').textContent = cur.xsav == null ? 'no data for this case: has no effect' : '× the normal tariff';
             $('tvn').textContent = cur.td == null ? 'no trip data for this case: has no effect' : (cur.td - cur.ts > 0.01 ? '€ for each trip the plant lets you serve' : 'this case loses no trips: has no effect');
             $('verdict').innerHTML = 'Net present value <b class="' + (pos ? 'good' : 'bad') + '">' + fmt(r.npv) + ' €</b> over ' + p.hz + ' years at ' + (p.dr * 100).toFixed(1).replace(/\.0$/, '') + ' %. ' + (pos ? 'The investment repays within the horizon.' : 'The investment does not repay within the horizon.');
-            $('smart').textContent = 'Smart charging alone, with no investment, saves about ' + fmt(smartOf(cur, p)) + ' € a year over charging on arrival (' + cur.boats + ' boats). That saving is already in the reference and is not credited to the plant.' + (cur.td != null && cur.asg ? ' Trips served per week out of ' + cur.asg.toFixed(0) + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + ': ' + cur.tb.toFixed(1) + ' charging on arrival, ' + cur.ts.toFixed(1) + ' with smart charging, ' + cur.td.toFixed(1) + ' with the plant.' : '');
+            $('smart').textContent = 'Smart charging alone, with no investment, saves about ' + fmt(smartOf(cur, p)) + ' € a year over charging on arrival (' + cur.boats + ' boats). That saving is already in the reference and is not credited to the plant. Smart charging plus this plant, against charging on arrival, gives a net present value of ' + fmt(pkgNpv(cur, p, r)) + ' €.' + (cur.td != null && cur.asg ? ' Trips served per week out of ' + cur.asg.toFixed(0) + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + ': ' + cur.tb.toFixed(1) + ' charging on arrival, ' + cur.ts.toFixed(1) + ' with smart charging, ' + cur.td.toFixed(1) + ' with the plant.' : '');
             var s = '<tr><th>Line</th><th>Calculation</th><th class="r">€</th></tr>';
             s += tr('<td>Solar</td><td class="c">' + cur.pv + ' kWp × ' + p.pvp.toFixed(2) + ' €/Wp</td><td class="r">' + fmt(r.solarCost) + '</td>');
             s += tr('<td>Battery</td><td class="c">' + cur.b + ' kWh × ' + fmt(p.bp) + ' €/kWh</td><td class="r">' + fmt(r.bessCost) + '</td>');
@@ -574,7 +576,9 @@
             s += tr('<td>Net over ' + p.hz + ' years, discounted</td><td class="c">' + fmt(r.net) + ' × ' + r.ann.toFixed(3) + '</td><td class="r">' + fmt(r.pvNet) + '</td>');
             s += tr('<td>Battery replacements</td><td class="c">' + r.nrep + (r.nrep === 1 ? ' replacement' : ' replacements') + (cur.b > 0 ? ', battery life ' + r.life.toFixed(1) + ' years' : '') + ', in today’s money</td><td class="r">' + fmt(-r.repPV) + '</td>');
             s += tr('<td>Purchase</td><td class="c"></td><td class="r">' + fmt(-r.capex) + '</td>');
-            s += tr('<td>Net present value</td><td class="c"></td><td class="r">' + fmt(r.npv) + '</td>', 'tot');
+            s += tr('<td>Net present value</td><td class="c">plant, against smart charging</td><td class="r">' + fmt(r.npv) + '</td>', 'tot');
+            s += tr('<td>Smart charging per year</td><td class="c">charging on arrival − scheduled, no purchase</td><td class="r">' + fmt(smartOf(cur, p)) + '</td>');
+            s += tr('<td>Net present value, smart charging + plant</td><td class="c">against charging on arrival</td><td class="r">' + fmt(pkgNpv(cur, p, r)) + '</td>', 'tot');
             s += tr('<td>Simple payback</td><td class="c">purchase ÷ net per year</td><td class="r">' + yrs(r.simple) + '</td>');
             s += tr('<td>Discounted payback</td><td class="c">with battery replacements</td><td class="r">' + yrs(r.disc) + '</td>');
             s += tr('<td>Savings needed to break even</td><td class="c">multiple of the simulated savings</td><td class="r">' + (isFinite(r.need) ? '× ' + r.need.toFixed(1) : '—') + '</td>');
@@ -605,10 +609,10 @@
         function drawCases(p) {
             var rows = CASES.map(function (c) { return { c: c, r: calc(c, p) } });
             var vals = rows.map(function (x) { return x.r.npv }), lo = Math.min.apply(null, vals.concat([0])), hi = Math.max.apply(null, vals.concat([0])), span = (hi - lo) || 1, zp = (0 - lo) / span * 100;
-            var h = '<tr><th>Case</th><th class="r">Savings €/yr</th><th class="r">Smart charging €/yr</th><th class="r">Battery life</th><th class="r">NPV €</th><th class="r"></th></tr>';
+            var h = '<tr><th>Case</th><th class="r">Savings €/yr</th><th class="r">Smart charging €/yr</th><th class="r">Battery life</th><th class="r">NPV €</th><th class="r">NPV with smart charging €</th><th class="r"></th></tr>';
             rows.forEach(function (x) {
                 var a = (Math.min(x.r.npv, 0) - lo) / span * 100, b2 = (Math.max(x.r.npv, 0) - lo) / span * 100;
-                h += '<tr class="pick' + (x.c === cur ? ' sel' : '') + '" data-id="' + x.c.id + '" tabindex="0"><td>' + x.c.name + '</td><td class="r">' + fmt(savOf(x.c, p)) + '</td><td class="r">' + fmt(smartOf(x.c, p)) + '</td><td class="r">' + (x.c.b > 0 ? x.c.life.toFixed(1) + ' y' : '—') + '</td><td class="r">' + fmt(x.r.npv) + '</td><td class="r"><span class="track"><span class="fill" style="left:' + a + '%;width:' + Math.max(b2 - a, 0.8) + '%"></span><span class="zl" style="left:' + zp + '%"></span></span></td></tr>';
+                h += '<tr class="pick' + (x.c === cur ? ' sel' : '') + '" data-id="' + x.c.id + '" tabindex="0"><td>' + x.c.name + '</td><td class="r">' + fmt(savOf(x.c, p)) + '</td><td class="r">' + fmt(smartOf(x.c, p)) + '</td><td class="r">' + (x.c.b > 0 ? x.c.life.toFixed(1) + ' y' : '—') + '</td><td class="r">' + fmt(x.r.npv) + '</td><td class="r">' + fmt(pkgNpv(x.c, p, x.r)) + '</td><td class="r"><span class="track"><span class="fill" style="left:' + a + '%;width:' + Math.max(b2 - a, 0.8) + '%"></span><span class="zl" style="left:' + zp + '%"></span></span></td></tr>';
             });
             $('cases').innerHTML = h;
             Array.prototype.forEach.call($('cases').querySelectorAll('tr.pick'), function (el) {
