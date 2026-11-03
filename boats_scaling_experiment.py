@@ -162,6 +162,24 @@ CHARGER_EFFICIENCY = 0.95
 BOAT_SPEC = dict(motor_power=120, weight=2500, length=8.5,
                   battery_capacity=150, range_speed=15.0, soc=0.30)
 
+# Boat types for mixed fleets (--fleet-mix). Electric equivalents assumed from the
+# Funchal inventory (VES-07), not manufacturer data. charger_kw = charger per boat.
+#   ref = PyPort reference vessel (the default when --fleet-mix is not used)
+#   rib = small fast boat / RIB, few passengers
+#   cat = tourist catamaran
+#   lux = luxury catamaran
+BOAT_TYPES = {
+    "ref": (dict(BOAT_SPEC), None),
+    "rib": (dict(motor_power=80, weight=1800, length=7.5, battery_capacity=100,
+                 range_speed=15.0, soc=0.30), 22.0),
+    "cat": (dict(motor_power=150, weight=9000, length=15.0, battery_capacity=250,
+                 range_speed=15.0, soc=0.30), 50.0),
+    "lux": (dict(motor_power=250, weight=14000, length=16.0, battery_capacity=350,
+                 range_speed=15.0, soc=0.30), 100.0),
+}
+FLEET_TYPES = None        # list of type names, one per boat, set by --fleet-mix
+FLEET_MIX_LABEL = ""
+
 # GRD-01: grid-import limit, SCALED with the fleet (supervisor decision,
 # 26 Oct 2026): every charger can run at full power at the same time, so
 # the grid connection never limits the service level and the NPV is not
@@ -187,6 +205,8 @@ SEED = None
 def contracted_power_for(num_boats: int) -> float:
     if GRID_LIMIT_KW is not None:
         return GRID_LIMIT_KW
+    if FLEET_TYPES:
+        return sum((BOAT_TYPES[t][1] or CHARGER_KW) for t in FLEET_TYPES)
     return num_boats * CHARGER_KW
 
 START_DATE = "2025-09-01"  # legacy single week ("sep")
@@ -204,6 +224,14 @@ SEASONS = {
     "sep":    (START_DATE, 365.0 / 7.0),           # the old single week
 }
 ALL_SEASONS = ["winter", "spring", "summer", "autumn"]
+
+# Twelve monthly weeks (a Monday per month, no public holiday in the week).
+# Each stands for 1/12 of the year; --seasons normalises the weights anyway.
+MONTH_STARTS = ["2025-01-13", "2025-02-10", "2025-03-10", "2025-04-07",
+                "2025-05-12", "2025-06-02", "2025-07-14", "2025-08-04",
+                "2025-09-08", "2025-10-13", "2025-11-10", "2025-12-15"]
+for _i, _d in enumerate(MONTH_STARTS, 1):
+    SEASONS[f"m{_i:02d}"] = (_d, 365.0 / 7.0 / 12.0)
 TARIFF_PATH = "assets/tariff/default_tariff.json"
 
 
@@ -216,8 +244,10 @@ def build_port(num_boats: int, with_der: bool, contracted_power: float) -> Port:
         tariff_path=TARIFF_PATH,
     )
     for i in range(1, num_boats + 1):
-        boat = Boat(name=f"SeaBreeze_{i}", **BOAT_SPEC)
-        charger = Charger(name=f"FastCharger_{i}", max_power=CHARGER_KW,
+        kind = FLEET_TYPES[i - 1] if FLEET_TYPES else "ref"
+        spec, charger_kw = BOAT_TYPES[kind]
+        boat = Boat(name=f"SeaBreeze_{i}", **spec)
+        charger = Charger(name=f"FastCharger_{i}", max_power=(charger_kw or CHARGER_KW),
                            efficiency=CHARGER_EFFICIENCY)
         port.add_boat(boat)
         port.add_charger(charger)
@@ -345,7 +375,7 @@ def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
 
 
 def main():
-    global PV_KW, BESS_KWH, BESS_KW, GRID_LIMIT_KW, SEED
+    global PV_KW, BESS_KWH, BESS_KW, GRID_LIMIT_KW, SEED, TARIFF_PATH, FLEET_TYPES, FLEET_MIX_LABEL
     parser = argparse.ArgumentParser(description="Boat-count scaling sensitivity for a fixed PV+BESS install")
     parser.add_argument("--boat-counts", type=int, nargs="+", default=[2, 3, 4, 5, 6, 8, 10],
                          help="Boat/charger counts to test (default: 2 3 4 5 6 8 10)")
@@ -389,6 +419,12 @@ def main():
                          help="seed the trip assignment (per season and fleet size) so all scenarios of "
                               "a week get the same trips and a run can be repeated exactly. "
                               "Default: unseeded, a different draw every time")
+    parser.add_argument("--tariff-json", default=None,
+                         help="EXPERIMENT: tariff file to use instead of assets/tariff/default_tariff.json "
+                              "(same format). Used for the tariff-shape sensitivity.")
+    parser.add_argument("--fleet-mix", default=None,
+                         help="EXPERIMENT: boat types, e.g. rib:2,cat:1,lux:1 (types ref, rib, cat, lux). "
+                              "The number of boats is the sum; --boat-counts is overridden.")
     parser.add_argument("--out-csv", default="boats_scaling_results.csv")
     args = parser.parse_args()
     if args.bess_decline_case:
@@ -396,7 +432,20 @@ def main():
             parser.error("Use either --bess-price-decline or --bess-decline-case, not both.")
         args.bess_price_decline = bess_price_decline_for_case(args.bess_decline_case)
 
+    if args.tariff_json:
+        TARIFF_PATH = args.tariff_json
+        print(f"Tariff file: {TARIFF_PATH}")
     GRID_LIMIT_KW = args.grid_limit_kw
+    if args.fleet_mix:
+        FLEET_TYPES = []
+        for part in args.fleet_mix.split(","):
+            name, count = part.split(":")
+            if name not in BOAT_TYPES:
+                parser.error(f"unknown boat type {name!r}; choose from {sorted(BOAT_TYPES)}")
+            FLEET_TYPES += [name] * int(count)
+        FLEET_MIX_LABEL = args.fleet_mix
+        args.boat_counts = [len(FLEET_TYPES)]
+        print(f"Fleet mix: {FLEET_MIX_LABEL} -> {len(FLEET_TYPES)} boats")
     SEED = args.seed
     PV_KW = args.pv_kwp
     BESS_KWH = args.bess_kwh
@@ -530,6 +579,7 @@ def main():
 
         rows.append({
             "num_boats": n,
+            "fleet_mix": FLEET_MIX_LABEL,
             "pv_kwp": PV_KW,
             "bess_kwh": BESS_KWH,
             "bess_kw": BESS_KW if BESS_KWH > 0 else 0.0,
