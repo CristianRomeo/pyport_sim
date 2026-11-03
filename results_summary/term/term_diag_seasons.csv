@@ -1,0 +1,2 @@
+num_boats,season,start_date,weeks,assigned_trips,baseline_weekly_eur,baseline_service_level,der_weekly_eur,der_service_level,baseline_excess_kwh,scheduled_excess_kwh,der_excess_kwh,baseline_peak_kw,scheduled_peak_kw,der_peak_kw,scheduled_weekly_eur,scheduled_service_level,weekly_savings_eur
+6,summer,2025-07-14,52.14,126,1370.77,0.762,1611.13,0.889,0.0,0.0,0.0,80.0,80.0,80.0,1334.62,0.754,-276.51

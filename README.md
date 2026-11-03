@@ -280,3 +280,35 @@ See `requirements.txt` for complete list.
 - Simulation supports up to 7 days per run
 - Trip routes must be in CSV format with specific columns
 - Database file is created automatically on first run
+
+## Economic layer and planner (Master's thesis)
+
+On top of PyPort this repository adds a techno-economic layer
+(`economics/`, see its README), experiment scripts and a static planner.
+
+**Run a series** (from the repository root; `--seed` makes the runs repeatable):
+
+```bash
+python garmin_scaling_experiment.py --boat-counts 4 --pv-kwp 0 --bess-kwh 200 --bess-kw 100 \
+    --grid-limit-kw 120 --seed 1 --out-csv results/example_1.csv
+```
+
+Useful options: `--seasons winter spring summer autumn` (default) or `m01 ... m12`
+(twelve monthly weeks); `--tariff-json assets/tariff/tariff_flat.json` (flat, narrow
+or wide tariff, built by `make_tariffs.py`); `--grid-limit-kw` (fixed grid cap);
+`--fleet-mix rib:2,cat:1,lux:1` (experimental mixed fleets, boat types are assumptions).
+On Windows, set `PYTHONUTF8=1` before piping the output to a file.
+
+**Rebuild the planner data and open it:**
+
+```bash
+python build_dashboard_cases.py     # writes dashboard/cases.js from results/
+```
+
+then open `dashboard/index.html` in a browser.
+
+**Tests:** `python -m pytest tests` (111 tests).
+
+Summary CSVs of the series used in the thesis are in `results_summary/`.
+All prices (PV, battery, tariff) are placeholders until supplier quotes and the
+EEM tariff arrive.
