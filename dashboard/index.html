@@ -470,6 +470,44 @@
             margin: 18px 0 26px
         }
 
+        .tbar {
+            display: grid;
+            grid-template-columns: 200px 1fr 250px;
+            gap: 10px;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 14px
+        }
+
+        .tbar .trk {
+            background: var(--faint);
+            height: 16px;
+            border-radius: 2px;
+            overflow: hidden
+        }
+
+        .tbar .fil {
+            height: 100%;
+            background: var(--good)
+        }
+
+        .tbar .fil.short {
+            background: var(--bad)
+        }
+
+        .tbar .val {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+            color: var(--muted)
+        }
+
+        @media (max-width: 640px) {
+            .tbar {
+                grid-template-columns: 1fr;
+                gap: 2px
+            }
+        }
+
         .tile {
             border-left: 3px solid var(--accent);
             padding: 2px 0 2px 12px
@@ -528,6 +566,20 @@
         .tag.t2 {
             color: var(--accent);
             border-color: var(--accent)
+        }
+
+        details.app {
+            margin-top: 34px;
+            border-top: 1px solid var(--rule)
+        }
+
+        details.app>summary {
+            cursor: pointer;
+            padding: 16px 0;
+            font-family: var(--serif);
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--accent)
         }
 
         .box {
@@ -609,6 +661,12 @@
                     <div class="row"><label for="pp">Peak-hour power charge<small id="ppn">€ per kW per year of average
                                 power in the peak hours</small></label><input id="pp" type="number" step="1" min="0"
                             max="250" value="88.9"></div>
+                    <div class="row"><label for="cp">Contracted power charge<small id="cpn">€ per kW per
+                                year</small></label><input id="cp" type="number" step="0.1" min="0" max="60"
+                            value="16.7"></div>
+                    <div class="row"><label for="cu">Connection upgrade cost<small id="cun">€ per kW of new connection,
+                                one-off; leave empty if unknown</small></label><input id="cu" type="number" step="10"
+                            min="0" placeholder="unknown" value=""></div>
                 </fieldset>
                 <fieldset>
                     <legend>Service</legend>
@@ -646,6 +704,11 @@
                     <p class="note" id="smart"></p>
                     <p class="note" id="plainnote"></p>
                 </section>
+                <section id="tripsec">
+                    <h2>Trips served</h2>
+                    <div id="tripbars"></div>
+                    <p class="note" id="tripnote"></p>
+                </section>
                 <section>
                     <h2>Four ways to run the marina</h2>
                     <p class="note">Charging on arrival is the reference, so its row is zero. The second column is the
@@ -657,6 +720,10 @@
                     <div class="scroll">
                         <table id="cmp"></table>
                     </div>
+                </section>
+                <section id="upsec" style="display:none">
+                    <h2>Raising the connection instead</h2>
+                    <p class="note" id="upnote"></p>
                 </section>
                 <section>
                     <h2>Statement</h2>
@@ -728,7 +795,7 @@
         // Reduced case list: the medium-voltage cases with a measured peak-hour power, plus the special low voltage cases.
         CASES = CASES.filter(function (c) { return c.tar !== 'eem_mt' || c.ph });
         PH = CASES.filter(function (c) { return c.tar === 'eem_mt' });
-        var DEF = { pvp: 1.0, bp: 650, kp: 100, pvo: 0.015, bo: 2.25, eg: 2.4, pp: 88.9, mult: 1, xf: 1, ep: 0.05, tv: 0, dr: 7, hz: 20, lm: 1, dec: 0 };
+        var DEF = { pvp: 1.0, bp: 650, kp: 100, pvo: 0.015, bo: 2.25, eg: 2.4, pp: 88.9, cp: 16.7, mult: 1, xf: 1, ep: 0.05, tv: 0, dr: 7, hz: 20, lm: 1, dec: 0 };
         var CAL = 15, cur = null;
         var $ = function (id) { return document.getElementById(id) };
         var fmt = function (x) { var r = Math.round(x); return (r < 0 ? '−' : '') + Math.abs(r).toLocaleString('en-GB') };
@@ -737,7 +804,7 @@
 
         function val(id) { var v = parseFloat($(id).value); return isNaN(v) ? DEF[id] : v }
         function inputs() {
-            return { pvp: val('pvp'), bp: val('bp'), kp: Math.max(val('kp'), 0), pvo: val('pvo'), bo: val('bo') / 100, eg: Math.max(val('eg'), 0) / 100, pp: Math.max(val('pp'), 0), mult: val('mult'), xf: Math.max(val('xf'), 0), ep: Math.min(Math.max(val('ep'), 0), 0.1), tv: Math.max(val('tv'), 0), dr: Math.max(val('dr'), 0.1) / 100, hz: Math.max(Math.round(val('hz')), 1), lm: val('lm'), dec: val('dec') / 100 };
+            return { pvp: val('pvp'), bp: val('bp'), kp: Math.max(val('kp'), 0), pvo: val('pvo'), bo: val('bo') / 100, eg: Math.max(val('eg'), 0) / 100, pp: Math.max(val('pp'), 0), cp: Math.max(val('cp'), 0), cu: ($('cu').value === '' || isNaN(parseFloat($('cu').value))) ? null : Math.max(parseFloat($('cu').value), 0), mult: val('mult'), xf: Math.max(val('xf'), 0), ep: Math.min(Math.max(val('ep'), 0), 0.1), tv: Math.max(val('tv'), 0), dr: Math.max(val('dr'), 0.1) / 100, hz: Math.max(Math.round(val('hz')), 1), lm: val('lm'), dec: val('dec') / 100 };
         }
         function schedule(cost, life, hz, dec) {
             var out = {}, k = 1, y;
@@ -751,6 +818,14 @@
         // Battery power above the 4-hour reference (0.25 kW per kWh, included in the EUR/kWh price) costs p.kp EUR per kW.
         function extraKw(c) { var d = Math.min(50, c.b / 4), k = c.bkw != null ? c.bkw : d; return c.b > 0 ? Math.max(0, k - c.b / 4) : 0 }
         function growAnn(r, n, g) { var s = 0; for (var t = 1; t <= n; t++) s += Math.pow(1 + g, t - 1) / Math.pow(1 + r, t); return s }
+        // Raising the connection to the power the fleet needs, instead of the plant (grid-limited cases only).
+        function upgradeOf(c, p, r) {
+            if (c.cap >= c.boats * 50 || c.asg == null || c.ts == null || c.pkmode === 'plain') return null;
+            var dk = c.boats * 50 - c.cap, tvUp = p.tv * (c.asg - c.ts) * 365 / 7 * r.ann, contr = dk * p.cp * r.ann;
+            var o = { dk: dk, full: c.boats * 50, tvUp: tvUp, contr: contr, plant: r.npv, cstar: (tvUp - contr - r.npv) / dk };
+            if (p.cu != null) { o.upNpv = tvUp - contr - dk * p.cu; o.diff = o.upNpv - r.npv }
+            return o;
+        }
         function calc(c, p, o) {
             o = o || {};
             var life = o.never ? 0 : (c.b > 0 ? Math.min(CAL, c.life * (o.lm || p.lm)) : 0);
@@ -821,9 +896,21 @@
             $('xfn').textContent = cur.xsav == null ? 'no data for this case: has no effect' : '× the normal tariff';
             $('tvn').textContent = cur.td == null ? 'no trip data for this case: has no effect' : (cur.td - cur.ts > 0.01 ? '€ for each trip the plant lets you serve' : 'this case loses no trips: has no effect');
             $('verdict').innerHTML = 'The plant, against smart charging: net present value <b class="' + (pos ? 'good' : 'bad') + '">' + fmt(r.npv) + ' €</b> over ' + p.hz + ' years at ' + (p.dr * 100).toFixed(1).replace(/\.0$/, '') + ' %. ' + (pos ? 'The investment repays within the horizon.' : 'The investment does not repay within the horizon.') + ' <span class="note">Tariff of this case: ' + TAR[cur.tar] + '.</span>';
-            $('smart').textContent = 'Smart charging alone, with no investment, saves about ' + fmt(smartOf(cur, p)) + ' € a year over charging on arrival (' + cur.boats + ' boats)' + (smartPeak(cur, p) > 0 ? ', of which ' + fmt(smartPeak(cur, p)) + ' € from the peak-hour power charge' : '') + '. That saving is already in the reference and is not credited to the plant.' + (cur.smartl != null && Math.abs(cur.smartl - cur.smart) > 100 ? ' It is priced per served trip, because smart charging does not serve the same number of trips as charging on arrival.' : '') + ' Smart charging plus this plant, against charging on arrival, gives a net present value of ' + fmt(pkgNpv(cur, p, r)) + ' €.' + (cur.td != null && cur.asg ? ' Trips served per week out of ' + cur.asg.toFixed(0) + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + ': ' + cur.tb.toFixed(1) + ' charging on arrival, ' + cur.ts.toFixed(1) + ' with smart charging, ' + cur.td.toFixed(1) + ' with the plant.' : '');
+            $('smart').textContent = 'Smart charging alone, with no investment, saves about ' + fmt(smartOf(cur, p)) + ' € a year over charging on arrival (' + cur.boats + ' boats)' + (smartPeak(cur, p) > 0 ? ', of which ' + fmt(smartPeak(cur, p)) + ' € from the peak-hour power charge' : '') + '. That saving is already in the reference and is not credited to the plant.' + (cur.smartl != null && Math.abs(cur.smartl - cur.smart) > 100 ? ' It is priced per served trip, because smart charging does not serve the same number of trips as charging on arrival.' : '') + ' Smart charging plus this plant, against charging on arrival, gives a net present value of ' + fmt(pkgNpv(cur, p, r)) + ' €.' + (cur.td != null && cur.asg ? ' The share of trips served is shown below.' : '');
             var pe = plainOf(cur), pr = pe ? calc(plainCase(pe, cur), p) : null;
             $('plainnote').textContent = pr ? 'Without smart charging: the same plant, with boats charged on arrival and a simple battery rule instead of the optimiser, has a net present value of ' + fmt(pr.npv) + ' € against charging on arrival (' + (pr.npv >= 0 ? 'it repays' : 'it does not repay') + ' within the horizon). With smart charging the package is at ' + fmt(pkgNpv(cur, p, r)) + ' €. Trips served per week: ' + pe.td.toFixed(1) + ' of ' + pe.asg.toFixed(0) + '.' : 'The plant without smart charging was simulated for the medium voltage cases only, so there is no figure for this one.';
+            var ug = upgradeOf(cur, p, r), us = $('upsec');
+            $('cpn').textContent = ug ? '€ per kW per year (16.7 = medium voltage, 21.1 = special low voltage); used in the connection comparison' : 'this case has no grid limit: no effect';
+            $('cun').textContent = ug ? '€ per kW of new connection, one-off; leave empty if unknown' : 'this case has no grid limit: no effect';
+            if (!ug) { us.style.display = 'none' } else {
+                us.style.display = '';
+                var t = 'Instead of the plant, the marina could ask EEM to raise the connection from ' + cur.cap + ' to ' + ug.full + ' kW (+' + ug.dk + ' kW), which serves every trip. The contracted power would cost ' + fmt(ug.dk * p.cp) + ' € a year more, ' + fmt(ug.contr) + ' € over ' + p.hz + ' years. ';
+                t += ug.cstar > 0 ? 'The plant is the cheaper way only if the connection costs more than <b>' + fmt(ug.cstar) + ' € per kW</b> added (one-off); below that, the upgrade wins. ' : 'The plant is cheaper than the upgrade even if the connection were free. ';
+                t += p.cu != null ? 'With ' + fmt(p.cu) + ' € per kW the upgrade costs ' + fmt(ug.dk * p.cu) + ' € and its net present value is <b class="' + (ug.upNpv >= 0 ? 'good' : 'bad') + '">' + fmt(ug.upNpv) + ' €</b>, against ' + fmt(ug.plant) + ' € for the plant: the ' + (ug.diff >= 0 ? 'upgrade' : 'plant') + ' is better by ' + fmt(Math.abs(ug.diff)) + ' €. ' : 'Enter a connection cost in the inputs to compare directly. ';
+                t += p.tv ? 'Trips are valued at ' + fmt(p.tv) + ' € each.' : 'Trips are not valued (0 € each), so the comparison is on cost only.';
+                t += ' The change in energy cost from lifting the limit is not counted.';
+                $('upnote').innerHTML = t;
+            }
             var s = '<tr><th>Line</th><th>Calculation</th><th class="r">€</th></tr>';
             s += tr('<td>Solar</td><td class="c">' + cur.pv + ' kWp × ' + p.pvp.toFixed(2) + ' €/Wp</td><td class="r">' + fmt(r.solarCost) + '</td>');
             s += tr('<td>Battery</td><td class="c">' + cur.b + ' kWh × ' + fmt(p.bp) + ' €/kWh</td><td class="r">' + fmt(r.bessCost) + '</td>');
@@ -850,14 +937,52 @@
             s += tr('<td>Break-even prices</td><td class="c">solar and battery scaled together</td><td class="r">' + (be ? (p.pvp * be).toFixed(2) + ' €/Wp' + (cur.b > 0 ? ' · ' + fmt(p.bp * be) + ' €/kWh' : '') : 'none: upkeep exceeds savings') + '</td>');
             if (cur.exp) s += tr('<td>Export price to break even</td><td class="c">other inputs unchanged</td><td class="r">' + (r.npv >= 0 ? 'already positive' : (function (e) { return e.toFixed(3) + ' €/kWh' + (e > 0.12 ? ' (above the import price)' : '') })(p.ep - r.npv / (r.G * cur.exp))) + '</td>');
             $('stmt').innerHTML = s;
+            drawTrips(p, r);
             drawCmp(p, r);
             drawChart(p, r); drawCases(p); drawSens(p);
+        }
+        function tp(v, a) { return v.toFixed(1) + ' (' + (v / a * 100).toFixed(0) + ' %)' }
+        function drawTrips(p, r) {
+            var sec = $('tripsec');
+            if (cur.td == null || !cur.asg) { sec.style.display = 'none'; return }
+            sec.style.display = '';
+            var A = cur.asg, pe = plainOf(cur), yr = 365 / 7, ok = function (v) { return v >= A * 0.995 };
+            var rows = [['Charging on arrival', cur.tb]];
+            if (pe) rows.push(['Plant, charging on arrival', pe.td]);
+            rows.push(['Smart charging', cur.ts], ['Smart charging + plant', cur.td]);
+            var h = '';
+            rows.forEach(function (x) {
+                var pc = Math.min(100, x[1] / A * 100);
+                h += '<div class="tbar"><span>' + x[0] + '</span><div class="trk"><div class="fil' + (ok(x[1]) ? '' : ' short') + '" style="width:' + pc.toFixed(1) + '%"></div></div><span class="val">' + x[1].toFixed(1) + ' of ' + A.toFixed(0) + ' per week · ' + pc.toFixed(1) + ' %</span></div>';
+            });
+            $('tripbars').innerHTML = h;
+            var lostArr = (A - cur.tb) * yr, lostSm = (A - cur.ts) * yr, lostPl = (A - cur.td) * yr, rec = (cur.td - cur.ts) * yr;
+            var ug = upgradeOf(cur, p, r), t = '';
+            if (ok(cur.tb) && ok(cur.ts) && ok(cur.td)) {
+                t = 'Every way of running the marina serves all the planned trips' + (cur.cap ? ' under the ' + cur.cap + ' kW connection' : '') + ': the capacity is enough, so the value per trip has no effect on this case and only energy costs decide the result.';
+            } else {
+                t = 'With ' + (cur.cap ? 'a ' + cur.cap + ' kW connection' : 'this connection') + ' the fleet does not serve every planned trip: about ' + fmt(lostArr) + ' trips a year are lost when boats charge on arrival and ' + fmt(lostSm) + ' with smart charging. ';
+                if (ok(cur.ts)) {
+                    t += 'Smart charging alone already serves every trip, at no cost, so the plant recovers none: a value per trip favours smart charging over charging on arrival, not the plant. '
+                } else if (ok(cur.td)) {
+                    t += 'The plant brings smart charging up to 100 %, recovering ' + fmt(rec) + ' trips a year, so the capacity is enough once the plant is installed. ';
+                } else {
+                    t += 'Even with the plant ' + (cur.td / A * 100).toFixed(1) + ' % are served (' + fmt(lostPl) + ' trips a year still lost, ' + fmt(rec) + ' recovered): the capacity is ' + (cur.td / A >= 0.98 ? 'almost but not quite enough' : 'not enough') + ' for this fleet. ';
+                }
+                if (rec > 0.5 && !ok(cur.ts)) {
+                    var n0 = calc(cur, Object.assign({}, p, { tv: 0 })).npv, n1 = calc(cur, Object.assign({}, p, { tv: 100 })).npv;
+                    t += p.tv ? 'At ' + fmt(p.tv) + ' € per trip the recovered trips add ' + fmt(rec * p.tv) + ' € a year to the plant. ' : 'Trips are valued at 0 € in the Service input; each euro per trip would add ' + fmt(rec) + ' € a year to the plant. ';
+                    t += n0 >= 0 ? 'The plant already repays without valuing trips.' : 'The plant repays if a recovered trip is worth at least <b>' + fmt(-n0 * 100 / (n1 - n0)) + ' €</b>.';
+                }
+                if (ug) t += ' Raising the connection to ' + ug.full + ' kW would serve 100 % (section below).';
+            }
+            $('tripnote').innerHTML = t;
         }
         function drawCmp(p, r) {
             var sa = smartOf(cur, p), pk = pkgNpv(cur, p, r), pe = plainOf(cur), pr = pe ? calc(plainCase(pe, cur), p) : null;
             var pc = function (f, cls) { return pr ? '<td class="r' + (cls ? ' ' + cls(pr) : '') + '">' + f(pr) + '</td>' : '<td class="r">—</td>' };
             var h = '<tr><th>Per year unless stated</th><th class="r">Charging on arrival</th><th class="r">Plant, charging on arrival</th><th class="r">Smart charging</th><th class="r">Smart charging + plant</th></tr>';
-            if (cur.td != null && cur.asg) h += tr('<td>Trips served per week' + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + '</td><td class="r">' + cur.tb.toFixed(1) + '</td><td class="r">' + (pe ? pe.td.toFixed(1) : '—') + '</td><td class="r">' + cur.ts.toFixed(1) + '</td><td class="r">' + cur.td.toFixed(1) + '</td>');
+            if (cur.td != null && cur.asg) h += tr('<td>Trips served per week (share of planned)' + (cur.cap ? ' (grid limit ' + cur.cap + ' kW)' : '') + '</td><td class="r">' + tp(cur.tb, cur.asg) + '</td><td class="r">' + (pe ? tp(pe.td, pe.asg) : '—') + '</td><td class="r">' + tp(cur.ts, cur.asg) + '</td><td class="r">' + tp(cur.td, cur.asg) + '</td>');
             if (cur.ph) h += tr('<td>Average grid power in the peak hours, kW</td><td class="r">' + cur.ph.pkb.toFixed(1) + '</td><td class="r">' + cur.ph.pkp.toFixed(1) + '</td><td class="r">' + cur.ph.pks.toFixed(1) + '</td><td class="r">' + cur.ph.pkd.toFixed(1) + '</td>');
             h += tr('<td>Purchase</td><td class="r">0</td>' + pc(function (q) { return fmt(q.capex) }) + '<td class="r">0</td><td class="r">' + fmt(r.capex) + '</td>');
             h += tr('<td>Saving against charging on arrival</td><td class="r">0</td>' + pc(function (q) { return fmt(q.sav) }) + '<td class="r">' + fmt(sa) + '</td><td class="r">' + fmt(sa + r.sav) + '</td>');
@@ -919,7 +1044,7 @@
         }
 
         // ---------- Findings and Next steps views ----------
-        var PD = { pvp: 1.0, bp: 650, kp: 100, pvo: 0.015, eg: 0.024, pp: 88.9, bo: 0.0225, mult: 1, xf: 1, ep: 0.05, tv: 0, dr: 0.07, hz: 20, lm: 1, dec: 0 };
+        var PD = { pvp: 1.0, bp: 650, kp: 100, pvo: 0.015, eg: 0.024, pp: 88.9, cp: 16.7, cu: null, bo: 0.0225, mult: 1, xf: 1, ep: 0.05, tv: 0, dr: 0.07, hz: 20, lm: 1, dec: 0 };
         var CONS = { pvp: 2.4, pvo: 0.045 };
         var K = function (x, d) { var r = (Math.abs(x) / 1000).toFixed(d == null ? 1 : d); return (x < 0 && +r !== 0 ? '−' : '') + r };
         var KS = function (x) { return (x > 0 ? '+' : '') + K(x) };
@@ -969,6 +1094,19 @@
             g += '<text x="' + X(0).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">0 ' + unit + '</text>';
             return '<svg class="bars" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart">' + g + '</svg>';
         }
+        // Findings: main sections in reading order, checks that use the invented tariff folded into an appendix.
+        function arrangeFindings(h) {
+            var order = ['The short answer', 'How much the cost assumptions matter', 'Medium voltage or special low voltage?', 'What the price of exported solar does', 'What the rest of the marina changes', 'The peak-hour power charge', 'Why the battery does not repay', 'Solar and battery against the grid', 'When the grid is the limit', 'Raising the connection instead of buying the plant', 'A plant without smart charging', 'How far to trust these numbers'];
+            var appendix = ['The shape of the tariff decides the saving', 'Does a year of four weeks hold up?'], drop = ['Best packages for four boats'];
+            var parts = h.split('<section>'), map = {}, out = '', app = '';
+            parts.shift();
+            parts.forEach(function (p) { var m = /<h2[^>]*>([^<]*)<\/h2>/.exec(p); map[m ? m[1] : ''] = '<section>' + p });
+            order.forEach(function (t) { if (map[t] != null) { out += map[t]; delete map[t] } });
+            appendix.forEach(function (t) { if (map[t] != null) { app += map[t]; delete map[t] } });
+            drop.forEach(function (t) { delete map[t] });
+            Object.keys(map).forEach(function (t) { out += map[t] });
+            return out + '<details class="app"><summary>Appendix: sensitivity and checks</summary><p class="note">These two checks were run on the invented placeholder tariff of the first tests, before EEM’s 2026 tariff was available. They show how sensitive the answer is to the tariff and to the four-week year; the reference results are above.</p>' + app + '</details>';
+        }
         function renderFindings() {
             var rows = PH.map(function (c) { var r = calc(c, PD); return { c: c, r: r, pk: pkgNpv(c, PD, r) } });
             var nPlant = rows.filter(function (x) { return x.r.npv > 0 }).length, nPkg = rows.filter(function (x) { return x.pk > 0 }).length;
@@ -993,9 +1131,10 @@
             h += '<p class="result">Smart charging pays for itself with no investment. Solar alone comes close to repaying itself at the reference cost of ' + PD.pvp.toFixed(1) + ' €/Wp: 100 kWp (4 boats, medium voltage) has a net present value of ' + (pl100n != null ? KS(pl100n) + ' k€ against charging on arrival and ' : '') + KS(pvor.npv) + ' k€ on top of smart charging, over 20 years with energy prices growing ' + (PD.eg * 100).toFixed(1) + ' % a year. ' + (nBatPos === 0 ? 'The battery does not repay in any of the ' + batRows.length + ' simulated cases' : 'The battery repays in ' + nBatPos + ' of ' + batRows.length + ' cases') + '. At the conservative solar cost of ' + CONS.pvp.toFixed(1) + ' €/Wp the same 100 kWp is at ' + KS(pvCons) + ' k€.</p>';
             var posL = pl.filter(function (x) { return x.r.npv > 0 }).map(function (x) { return lab(x.e) + ', ' + x.e.boats + ' boats' });
             h += '<p>A plant bought without smart charging, with boats charged on arrival and a simple battery rule, is judged against charging on arrival: ' + (nPlainPos === 0 ? 'none of the ' + pl.length + ' plants simulated this way repays' : nPlainPos + ' of the ' + pl.length + ' plants simulated this way repay (' + posL.join('; ') + ')') + ' within 20 years at the default prices. Adding smart charging improves the result in ' + nBetter + ' of the ' + nPk + ' that also have a smart charging run.</p>';
+            h += '<p>The dashboard covers ' + CASES.length + ' cases: ' + PH.length + ' in medium voltage (four boats with no grid limit, and fleets of 2 to 10 boats with and without one) and ' + (CASES.length - PH.length) + ' in special low voltage. A battery only makes sense where the grid connection is the bottleneck, and even there it has to beat the simpler option of asking for a bigger connection (section “Raising the connection instead of buying the plant”).</p>';
             var smPH = 24790, smMT = smartOf(byId('b4_pv100_b200_eem_mt'), PD), smBT = smartOf(byId('b4_pv100_b200_eem_bte'), PD);
             var eAll = PH.map(function (c) { return calc(c, PD).npv });
-            h += '<div class="box"><p><b>The tariff is the main input.</b> These results use the tariff EEM publishes for 2026 in medium voltage: 0.087 to 0.123 €/kWh over the day, a spread of 0.036. Special low voltage (0.103 to 0.153, spread 0.050) is shown for comparison, because we do not know yet which one the marina is on. Earlier tests with an invented, wider tariff (0.12 / 0.20 / 0.30 €/kWh) saved ' + K(smPH) + ' k€ a year with smart charging, against ' + K(smMT) + ' k€ in medium voltage and ' + K(smBT) + ' k€ in special low voltage: that tariff overstated the value of smart charging by a factor of two to three, and it is kept only in the tariff-shape section as a sensitivity. On top of smart charging, ' + (eAll.every(function (v) { return v < 0 }) ? 'none of the ' + eAll.length + ' plants repays' : 'not every plant repays') + ' with the published tariff.</p></div>';
+            h += '<div class="box"><p><b>The tariff is the main input.</b> These results use the tariff EEM publishes for 2026 in medium voltage: 0.087 to 0.123 €/kWh over the day, a spread of 0.036. Special low voltage (0.103 to 0.153, spread 0.050) is shown for comparison, because we do not know yet which one the marina is on. Earlier tests with an invented, wider tariff (0.12 / 0.20 / 0.30 €/kWh) saved ' + K(smPH) + ' k€ a year with smart charging, against ' + K(smMT) + ' k€ in medium voltage and ' + K(smBT) + ' k€ in special low voltage: that tariff overstated the value of smart charging by a factor of two to three, and it is kept only in the appendix as a sensitivity. On top of smart charging, ' + (eAll.every(function (v) { return v < 0 }) ? 'none of the ' + eAll.length + ' plants repays' : 'not every plant repays') + ' with the published tariff.</p></div>';
 
             var bevPv = PD.ep - pvor.npv / (pvor.G * pvo.exp);
             h += '<p>Solar energy that the boats cannot use is sold to the grid, and we priced it at ' + PD.ep.toFixed(2) + ' €/kWh (published references for selling surplus range from 0.04 to 0.10 €/kWh, tied to the wholesale price). At the reference cost, 100 kWp of solar alone (no battery) ' + (pvor.npv >= 0 ? 'has a positive net present value on top of smart charging' : 'is at ' + K(pvor.npv) + ' k€ on top of smart charging, and would need an export price of ' + bevPv.toFixed(3) + ' €/kWh to break even') + '. The cost of the solar is what decides. The reference of ' + PD.pvp.toFixed(1) + ' €/Wp and ' + PD.pvo.toFixed(3) + ' €/Wp a year of upkeep comes from commercial prices in Spain (about 1.0 €/Wp for 10–100 kW and 0.8 for 100–250 kW, 2023, tax not stated) and from the 8–30 €/kW a year quoted for upkeep; Madeira may be dearer. At the conservative ' + CONS.pvp.toFixed(1) + ' €/Wp and ' + CONS.pvo.toFixed(3) + ' €/Wp the same plant is at ' + K(pvCons) + ' k€. Adding a battery makes it worse, because the battery costs more than it earns.</p>';
@@ -1076,7 +1215,7 @@
             h += '<div class="box"><p>The 100 kWp + 200 kWh plant saves roughly the same whatever the fleet, so its NPV stays near ' + K(calc(sb, PD0).npv, 0) + ' k€. Its battery lasts about ' + sb.life.toFixed(1) + ' simulated years and is replaced twice in 20. ' + (function () { var f = fl.filter(function (x) { return x.pk > 0 })[0]; return f ? 'The package turns positive from ' + f.c.boats + ' boats upward' : 'The package stays negative up to ' + fl[fl.length - 1].c.boats + ' boats' })() + ', because the saving from smart charging grows with the fleet while the plant’s does not.</p><p>More solar changes little at the reference price (on top of smart charging, 50 / 100 / 150 kWp alone: ' + [50, 100, 150].map(function (v) { var q = byId('b4_pv' + v + '_b0'); return q ? KS(calc(q, PD).npv) : '—' }).join(' / ') + ' k€) and makes the NPV clearly worse at the conservative ' + CONS.pvp.toFixed(1) + ' €/Wp. This depends on the price and on four representative weeks; supplier quotes and a longer solar year could change it.</p></div></section>';
             var ex = rows.filter(function (x) { return x.c.boats === 4 && x.c.cap === 200 && x.c.pv > 0 && x.c.exp != null && x.c.bkw !== 100 }).sort(function (a, b) { return a.c.pv - b.c.pv || a.c.b - b.c.b });
             h += '<section><h2>What the price of exported solar does</h2>';
-            h += '<p>The energy a solar plant makes and the boats cannot use goes to the grid. A plant of 100 kWp makes about 168 MWh a year and, alone, sends 137 MWh of it to the grid (the boats use the rest); a 200 kWh battery keeps more of it, and then 51 MWh are sent. The price paid for that energy is not known, so we simulated at ' + PD.ep.toFixed(2) + ' €/kWh and the Calculator lets you change it. Published references for selling surplus under the Portuguese self-consumption rules range from 0.04 to 0.10 €/kWh, indexed to the OMIE wholesale price (mainland sources, not specific to Madeira); a retailer’s fixed buy-back is about 0.05 €/kWh, and the Madeira instruction we found (undated) refers to 90 % of the OMIE price. The cheapest hour of the medium-voltage tariff is 0.087 €/kWh, so an export price above that would be a loophole in the model, not a realistic value.</p>';
+            h += '<p>The energy a solar plant makes and the boats cannot use goes to the grid. A plant of 100 kWp makes about 168 MWh a year and, alone, sends 137 MWh of it to the grid (the boats use the rest); a 200 kWh battery keeps more of it, and then 51 MWh are sent. The price paid for that energy is not known, so we simulated at ' + PD.ep.toFixed(2) + ' €/kWh and the Calculator lets you change it. In Madeira the surplus injected by a self-consumption unit is for now paid 0.9 × the monthly average of the OMIE day-ahead price (point 12 of Despacho 12/2020/DRETT, published in Despacho 240/2020); DLR 9/2026/M (art. 9) leaves the price to a new despacho and keeps the old rule until then. The price follows the wholesale market, so 0.05 €/kWh is an assumption to be checked against the OMIE monthly averages (references for the mainland range from 0.04 to 0.10 €/kWh). The cheapest hour of the medium-voltage tariff is 0.087 €/kWh, so an export price above that would be a loophole in the model, not a realistic value.</p>';
             h += '<div class="scroll"><table><tr><th class="r">Solar, kWp</th><th class="r">Battery, kWh</th><th class="r">Sent to grid, MWh/yr</th><th class="r">NPV at 0 €/kWh, k€</th><th class="r">at 0.05, k€</th><th class="r">at 0.10, k€</th><th class="r">Export price to break even</th><th class="r">at 0.05 and the conservative cost (2.4 €/Wp), k€</th></tr>';
             ex.forEach(function (x) {
                 var n = function (e, o) { return calc(x.c, Object.assign({}, PD, { ep: e }, o || {})).npv }, r0 = calc(x.c, PD);
@@ -1085,6 +1224,25 @@
             });
             h += '</table></div>';
             h += '<div class="box"><p>Selling the surplus is worth about ' + (function () { var v = ex.map(function (x) { return PD.ep * x.c.exp * x.r.G }); return K(Math.min.apply(null, v), 0) + '–' + K(Math.max.apply(null, v), 0) })() + ' k€ in present value for these plants at ' + PD.ep.toFixed(2) + ' €/kWh, about half of what the solar-only plants earn. The battery is what pulls every combined plant down: it adds ' + K(PD.bp * 100, 0) + ' k€ of purchase per 100 kWh, ' + K(PD.bp * 200, 0) + ' k€ for 200 kWh, and replaces itself in the 20 years.</p><p>Only the energy price enters here. The simulation dispatched the plant at 0.05 €/kWh; for 0 and 0.10 the table re-prices the same dispatch, which is exact only near 0.05 (at a very different price the optimiser would move the battery around). The last column re-prices the same plants at the conservative solar cost.</p></div></section>';
+
+            h += '<section><h2>What the rest of the marina changes</h2>';
+            h += '<p>Only the charging of the boats is simulated. The marina’s other consumption (lighting, buildings, pumps, shore power at the berths) is not in the model, and it matters in two ways.</p>';
+            h += '<p><b>It raises the value of solar.</b> A plant of 100 kWp makes about 168 MWh a year and, alone, sends 137 MWh of it to the grid at ' + PD.ep.toFixed(2) + ' €/kWh; the boats use the rest. If the rest of the marina used that energy on site, each kWh would save the energy price instead of earning the export price: roughly ' + (0.087 - PD.ep).toFixed(2) + ' to ' + (0.123 - PD.ep).toFixed(2) + ' € more per kWh in medium voltage.</p>';
+            h += '<p><b>It decides whether the solar is allowed.</b> As we read Madeira’s self-consumption regime (DLR 9/2026/M, art. 7 n.º 3), the estimated annual production should not exceed the average annual consumption of the supplied installation by more than 20 %, unless a storage that cycles daily is shown (n.º 5). At the production above, 50 kWp needs an installation that uses about 70 MWh a year, 100 kWp about 140 MWh and 150 kWp about 210 MWh. The charging of four boats is far below that (they use about 31 MWh of the 100 kWp plant’s energy). Annual quotas for plants that inject into the grid also apply (art. 5). This is to be confirmed against the published text and with the operator.</p>';
+            h += '<div class="box"><p>What we need from the marina is its annual consumption, its load profile and its contracted power. With them the solar can be sized to what the marina can use, and the 120 % rule can be checked.</p></div></section>';
+
+            var bc = byId('b4_pv0_b200_p100'), bcr = calc(bc, PD);
+            var bRows = [['Reference (650 €/kWh, life from the simulated cycling)', {}, {}], ['Battery lasts twice as long', {}, { lm: PD.lm * 2 }], ['Battery never replaced', {}, { never: true }], ['Battery at 300 €/kWh', { bp: 300 }, {}], ['300 €/kWh, never replaced', { bp: 300 }, { never: true }], ['200 €/kWh, never replaced', { bp: 200 }, { never: true }]];
+            h += '<section><h2>Why the battery does not repay</h2>';
+            h += '<p>On top of smart charging, a 200 kWh / 100 kW battery (four boats, no grid limit) adds ' + fmt(bcr.sav) + ' € a year, of which ' + fmt(bcr.pkv) + ' € is the peak-hour power charge. It costs ' + K(bcr.capex) + ' k€ to buy and ' + K(bcr.repPV) + ' k€ more in replacements, in present value. Four reasons:</p>';
+            h += '<p><b>The price gap is small.</b> The medium-voltage tariff runs from 0.087 to 0.123 €/kWh, so a full 200 kWh cycle can earn at most about ' + (200 * 0.036).toFixed(0) + ' € from the difference between hours.</p>';
+            h += '<p><b>Smart charging has already taken most of it.</b> Moving the boats’ charging to the cheap hours needs no investment and saves ' + K(smartOf(bc, PD)) + ' k€ a year; the battery only adds what is left.</p>';
+            h += '<p><b>The battery wears out.</b> In this case the simulated cycling would allow ' + (bcr.life < 15 ? bcr.life.toFixed(1) : 'more than 15') + ' years and the life is capped at 15 calendar years, so the battery is replaced ' + bcr.nrep + (bcr.nrep === 1 ? ' time' : ' times') + ' in ' + PD.hz + ' years. With solar the battery cycles more: for 100 kWp + 200 kWh the simulated life is ' + sbr.life.toFixed(1) + ' years and it is replaced ' + sbr.nrep + ' times. These lives come from a placeholder cycle-life curve (3,000 cycles to 80 % health) and from an optimiser that does not price wear, so with solar it may cycle for very small gains, and the life may be shorter than a vendor would quote.</p>';
+            h += '<p><b>It is bought at today’s price.</b> ' + PD.bp + ' €/kWh is in the upper part of the range quoted for commercial storage in Europe, and the price is held constant over the 20 years.</p>';
+            h += '<div class="scroll"><table><tr><th>Four boats, no grid limit</th><th class="r">Battery alone: NPV, k€</th><th class="r">Battery alone: smart charging + plant, k€</th><th class="r">100 kWp + 200 kWh: NPV, k€</th><th class="r">100 kWp + 200 kWh: smart charging + plant, k€</th></tr>';
+            bRows.forEach(function (b) { var P = Object.assign({}, PD, b[1]), r1 = calc(bc, P, b[2]), r2 = calc(sb, P, b[2]); h += '<tr><td>' + b[0] + '</td><td class="r">' + K(r1.npv) + '</td><td class="r">' + KS(pkgNpv(bc, P, r1)) + '</td><td class="r">' + K(r2.npv) + '</td><td class="r">' + KS(pkgNpv(sb, P, r2)) + '</td></tr>' });
+            h += '</table></div><p class="note">NPV is the plant against smart charging; the next column adds smart charging and compares with charging on arrival. The life of the battery alone is already at the 15-year cap, so doubling it changes nothing there. Costs and life are the inputs of the Calculator.</p>';
+            h += '<div class="box"><p>No single change makes the battery pay with four boats and no grid limit; only a much lower price together with a long life brings it close to zero. A battery pays when it replaces something dearer: trips that would otherwise be lost, or a bigger grid connection (the sections on the grid limit and on raising the connection).</p></div></section>';
 
             h += '<section><h2>When the grid is the limit</h2>';
             h += '<p class="note">With the connection limited to 80 or 120 kW, charging on arrival and smart charging both lose trips; a battery recovers some of them. Battery only, no solar, medium voltage, default prices. Each boat is assigned 912.5 trips a year. The tighter the limit, the more trips there are to recover and the lower the value of a trip needed to break even; when the limit is nearly enough for the fleet almost nothing is left to recover, so the break-even is very high. The “served” columns give the share of the planned trips the fleet can actually make: below 100 % the marina cannot serve every route with that many boats under that limit, even with the plant, and the trips left over are lost. Four-boat rows are the mean of two runs, the others a single run.</p>';
@@ -1096,7 +1254,16 @@
             h += '<h2 class="sub" style="font-size:17px;border:0">The same limits with solar (100 kWp + 200 kWh)</h2>';
             h += limHead('Plant');
             limPv.forEach(function (x) { h += limRow(x, '100 kWp + ' + x.c.b + ' kWh / ' + x.c.bkw + ' kW') });
-            h += '</table></div><p class="note">Click a row to open that case in the Calculator. Smart charging is priced per served trip, since it does not serve the same number of trips as charging on arrival. Solar recovers about the same trips as the battery alone and costs far more, so its NPV is always lower.</p></section>';
+            h += '</table></div><p class="note">Click a row to open that case in the Calculator. Smart charging is priced per served trip, since it does not serve the same number of trips as charging on arrival. Solar recovers about the same trips as the battery alone and costs far more, so its NPV is always lower.</p><div class="box"><p><b>How to read the value per trip.</b> The break-even is the net margin each recovered trip would have to bring the marina for the plant to repay: directly, through a fee per trip, or indirectly, through a higher berth fee for guaranteed charging. At the break-even values of the table it comes to a few thousand euros a boat a year. If the trips are earned by the boat operators, the marina only collects the part it manages to charge for. A recovered trip is counted once, either as a fee or inside the berth price, and the value stays flat over the years. Raising the connection also recovers the trips: see the section after this one.</p></div></section>';
+
+            var upRows = PH.filter(function (c) { return c.cap < c.boats * 50 && c.td != null }).map(function (c) { var r = calc(c, PD); return { c: c, r: r, u: upgradeOf(c, PD, r) } }).sort(function (a, b) { return a.c.boats - b.c.boats || a.c.cap - b.c.cap || a.c.pv - b.c.pv });
+            var upBat = upRows.filter(function (x) { return x.c.pv === 0 && x.u.cstar > 0 }).map(function (x) { return x.u.cstar });
+            h += '<section><h2>Raising the connection instead of buying the plant</h2>';
+            h += '<p>With a grid limit the marina has another option: ask EEM for a bigger connection, up to the 50 kW per boat the fleet needs, and keep charging as it does now. That costs a one-off connection charge and a higher contracted-power charge (' + PD.cp.toFixed(1) + ' € per kW per year in medium voltage, from EEM’s 2026 tariff; 21.1 in special low voltage). The connection charge has no public price in medium voltage: ERSE sets a fixed service fee (about 500 € below 2 MVA), but the network works are priced case by case with the operator. So the table shows what the connection would have to cost, per kW added, for the two options to cost the same. The Calculator compares them directly once a quote is entered.</p>';
+            h += '<div class="scroll"><table><tr><th>Case</th><th class="r">Connection, kW</th><th class="r">Plant: purchase + replacements, k€</th><th class="r">Per kW of connection avoided, €</th><th class="r">Plant NPV, k€</th><th class="r">Upgrade is cheaper if it costs less than, € per kW</th></tr>';
+            upRows.forEach(function (x) { var c = x.c; h += '<tr class="pick" data-id="' + c.id + '" tabindex="0"><td style="white-space:nowrap">' + c.boats + ' boats: ' + (c.pv ? c.pv + ' kWp + ' : '') + c.b + ' kWh / ' + c.bkw + ' kW</td><td class="r">' + c.cap + ' → ' + x.u.full + '</td><td class="r">' + K(x.r.capex + x.r.repPV) + '</td><td class="r">' + fmt((x.r.capex + x.r.repPV) / x.u.dk) + '</td><td class="r">' + K(x.r.npv) + '</td><td class="r">' + (x.u.cstar > 0 ? fmt(x.u.cstar) : 'whatever it costs') + '</td></tr>' });
+            h += '</table></div><p class="note">Grid limits only. The plant is judged against smart charging on the limited connection, trips valued at ' + fmt(PD.tv) + ' € each (the Service input of the Calculator). The upgrade serves every trip, so with a value per trip above zero it earns more than the plant, which does not recover them all. The change in energy cost from lifting the limit is not counted, nor is the contracted power the plant leaves unchanged.</p>';
+            h += '<div class="box"><p>' + (upBat.length ? 'The battery beats the upgrade only if the connection costs more than ' + fmt(Math.min.apply(null, upBat)) + ' to ' + fmt(Math.max.apply(null, upBat)) + ' € per kW added, depending on the case. ' : '') + 'Solar makes the plant dearer without recovering more trips, so it never competes with the upgrade. A quote from EEM for raising the connection of the marina to the power the fleet needs is the number that settles this.</p></div></section>';
 
             h += '<section><h2>A plant without smart charging</h2>';
             h += '<p>The results above judge the plant on top of smart charging. A marina could also install solar and a battery and keep charging each boat on arrival, with no optimiser. We simulated that case too, with a simple rule for the battery: solar surplus charges it; it covers the load above the grid limit; when the price is above the cheapest of the day and boats are charging, it covers as much of the load as it can; at the cheapest price, with no boat charging, it recharges from the grid up to the limit. Everything is compared with charging on arrival on the same grid. Where the connection is large enough that is the reference that serves every trip, with no plant and no smart charging. The connection is assumed to be in place already, so no upgrade cost is counted.</p>';
@@ -1108,10 +1275,8 @@
             h += '</table></div>';
             var fleets = []; pl.forEach(function (x) { if (x.e.cap === x.e.boats * 50 && x.e.b === 200 && fleets.indexOf(x.e.boats) < 0) fleets.push(x.e.boats) }); fleets.sort(function (a, b) { return a - b });
             var fx = function (n, pv) { return pl.filter(function (x) { return x.e.boats === n && x.e.cap === n * 50 && x.e.b === 200 && x.e.pv === pv })[0] };
-            h += '<h2 class="sub" style="font-size:17px;border:0">A growing fleet</h2>';
-            h += '<div class="scroll"><table><tr><th class="r">Boats</th><th class="r">Battery only: NPV, no smart charging, k€</th><th class="r">Battery only: smart charging + plant, k€</th><th class="r">100 kWp + battery: NPV, no smart charging, k€</th><th class="r">100 kWp + battery: smart charging + plant, k€</th></tr>';
-            fleets.forEach(function (n) { var a = fx(n, 0), b = fx(n, 100); h += '<tr><td class="r">' + n + '</td><td class="r">' + (a ? K(a.r.npv) : '—') + '</td><td class="r">' + (a && a.pk != null ? KS(a.pk) : '—') + '</td><td class="r">' + (b ? K(b.r.npv) : '—') + '</td><td class="r">' + (b && b.pk != null ? KS(b.pk) : '—') + '</td></tr>' });
-            h += '</table></div><p class="note">Battery 200 kWh / 100 kW alone, and 100 kWp of solar with 200 kWh / 50 kW. The grid limit is not binding (50 kW per boat). Most fleet sizes are single runs. A dash means there is no smart charging run for that fleet.</p>';
+            var gfv = fleets.map(function (n) { return fx(n, 100) }).filter(Boolean).map(function (x) { return x.r.npv });
+            h += '<p class="note">With ' + fleets[0] + ' to ' + fleets[fleets.length - 1] + ' boats and no grid limit, the plant without smart charging (100 kWp + 200 kWh / 50 kW) stays between ' + K(Math.min.apply(null, gfv)) + ' and ' + K(Math.max.apply(null, gfv)) + ' k€: like the plant with the optimiser, its value does not grow with the fleet. Most fleet sizes are single runs.</p>';
             var pc2 = pl.filter(function (x) { return x.c && x.e.cap < x.e.boats * 50 }).sort(function (a, b) { return a.e.cap - b.e.cap || a.e.boats - b.e.boats || a.e.pv - b.e.pv });
             var pv2 = function (v, a) { var q = v / a * 100; return (q >= 99.95 ? '100' : q.toFixed(1)) + ' %' };
             h += '<h2 class="sub" style="font-size:17px;border:0">When the grid is the limit</h2>';
@@ -1156,11 +1321,12 @@
             h += '<section><h2>How far to trust these numbers</h2><div class="box">';
             h += '<p><b>Costs.</b> Solar 1.0 €/Wp with 0.015 €/Wp a year of upkeep, battery 650 €/kWh with 2.25 % a year. The solar price is a commercial rooftop price in Spain (about 1.0 €/Wp for 10–100 kW and 0.8 for 100–250 kW, 2023, tax not stated); upkeep is within the 8–30 €/kW a year quoted for commercial plants; the battery price is in the upper part of the 400–720 €/kWh quoted for commercial storage in Europe in 2026. These are published figures, not quotes for Madeira, where shipping may raise them. A conservative set (2.4 €/Wp and 0.045 €/Wp a year, from US-based ranges) is kept for comparison. The Calculator lets you change them, and “Set break-even prices” shows what suppliers would have to offer.</p><p><b>Tariff.</b> Results use the published EEM 2026 energy tariff in medium voltage (special low voltage for four plants). The marina’s voltage level is not confirmed, and the contracted-power and fixed terms are not in the simulated cost; the peak-hour power charge is added afterwards from separate runs of every medium-voltage case. The tariff-shape and four-versus-twelve-week checks were run earlier on an invented tariff.</p>';
             h += '<p><b>Simulated, not measured.</b> Trips follow the simulator’s planned schedule, not measured marina data. Savings are averages of simulation seeds: three for the four-boat base cases, two for the four-boat cases with a grid limit, one for most five- and six-boat cases and for special low voltage (the Runs column says which).</p>';
-            h += '<p><b>Energy price growth.</b> The default is 2.4 % a year, the average yearly rise of Portuguese household electricity prices from 2007 to 2025 (Eurostat figures); we found no series for business customers, and over the last ten years the same prices rose only 0.6 % a year. It applies to the savings and to the export revenue, not to costs or to the value of a trip, and the tariff-shape, four-versus-twelve-week and invented-tariff tables use flat prices. Set it to 0 to see the flat-price results.</p><p><b>Network charges.</b> The per-kWh prices we use come from EEM’s final-customer sale tariff, which is the sum of the network, energy and commercialisation tariffs, so the network charge on each kWh is already inside them. The peak-hour power charge (per kW) is counted in every medium-voltage case; special low voltage has no figure. The contracted-power charge and the fixed daily term are left out; the highest power taken from the grid does not change with the plant in the simulation, so the first would not change.</p><p><b>Peak-hour power.</b> Measured over the four simulated weeks for every medium-voltage case, one run each (seed 1), standard peak hours (10:30–13:00 and 20:30–22:00 in summer time, 10:30–12:00 and 18:30–21:00 in winter time). The optional cycle that MT and BTE customers can choose has different peak hours and would give different numbers.</p><p><b>Plant without smart charging.</b> The battery follows a simple rule, not the optimiser, and the plant is judged against charging on arrival on the same connection, assumed already large enough. Medium voltage only, one or two runs per case.</p>';
-            h += '<p><b>Export price.</b> The price paid for solar energy sent to the grid is an assumption (0.05 €/kWh, in line with a Portuguese retail contract).</p>';
+            h += '<p><b>Energy price growth.</b> The default is 2.4 % a year, the average yearly rise of Portuguese household electricity prices from 2007 to 2025 (Eurostat figures); we found no series for business customers, and over the last ten years the same prices rose only 0.6 % a year. It applies to the savings and to the export revenue, not to costs or to the value of a trip, and the tariff-shape, four-versus-twelve-week and invented-tariff tables use flat prices. Set it to 0 to see the flat-price results.</p><p><b>Network charges.</b> The per-kWh prices we use come from EEM’s final-customer sale tariff, which is the sum of the network, energy and commercialisation tariffs, so the network charge on each kWh is already inside them. The peak-hour power charge (per kW) is counted in every medium-voltage case; special low voltage has no figure. The contracted-power charge and the fixed daily term are left out; the highest power taken from the grid does not change with the plant in the simulation, so the first would not change.</p><p><b>Peak-hour power.</b> Measured over the four simulated weeks for every medium-voltage case, one run each (seed 1), standard peak hours (10:30–13:00 and 20:30–22:00 in summer time, 10:30–12:00 and 18:30–21:00 in winter time). The optional cycle that MT and BTE customers can choose has different peak hours and would give different numbers.</p><p><b>Battery life.</b> The life of the battery comes from the simulated cycling and a placeholder cycle-life curve (3,000 cycles to 80 % health), and the optimiser does not price battery wear. Both are prudent, so the replacements counted here may be too many. The life multiplier of the Calculator and the table in “Why the battery does not repay” show the effect; a vendor’s curve will replace the placeholder.</p><p><b>The rest of the marina.</b> Only the charging of the boats is simulated. Other consumption would raise the value of solar and decides whether it is allowed under the 120 % rule; it is not in the model.</p><p><b>Grid connection.</b> The contracted-power price (16.7 €/kW a year in medium voltage, 21.1 in special low voltage) comes from EEM’s 2026 tariff. Raising a connection has no public price in medium voltage: ERSE’s published parameters give a fixed service fee (about 500 € below 2 MVA) and a per-kVA contribution only for low voltage, and network works are agreed case by case. The dashboard therefore reports the connection cost at which raising the connection and buying the plant cost the same, and takes a quote as an input. It does not count the change in energy cost from lifting the limit.</p><p><b>Plant without smart charging.</b> The battery follows a simple rule, not the optimiser, and the plant is judged against charging on arrival on the same connection, assumed already large enough. Medium voltage only, one or two runs per case.</p>';
+            h += '<p><b>Export price.</b> The price paid for solar energy sent to the grid is an assumption (0.05 €/kWh). The rule in force in Madeira pays 0.9 × the monthly average of the OMIE day-ahead price (Despacho 240/2020), which changes from month to month; we have not checked the figure against the OMIE series.</p>';
+            h += '<p><b>Value per trip.</b> It is the net margin the marina can collect for each extra trip, directly or through the berth fee, counted once and constant over the years. Who earns the trip (the marina or the boat operators) is not known yet.</p>';
             h += '<p><b>Recovered trips are not valued by default.</b> The plant NPV counts only energy savings. The value of a trip that would otherwise be lost is an input, left at zero until the operator gives a number.</p>';
             h += '</div></section>';
-            $('p-find').innerHTML = h;
+            $('p-find').innerHTML = arrangeFindings(h);
             Array.prototype.forEach.call($('p-find').querySelectorAll('tr.pick'), function (el) {
                 var go = function () { select(el.getAttribute('data-id')); showTab('calc'); window.scrollTo(0, 0) };
                 el.onclick = go;
@@ -1171,23 +1337,30 @@
             var it = function (t, tag, cls, body) { return '<div class="item"><h3>' + t + '<span class="tag ' + cls + '">' + tag + '</span></h3><p>' + body + '</p></div>' };
             var h = '<section><h2>What would change the answer</h2>';
             h += '<p class="note">These are the inputs that are still placeholders. Each one moves the result more than any further simulation would.</p>';
-            h += it('Electricity tariff', 'partly known', 't1', 'EEM’s 2026 prices and hourly bands are published and simulated (medium voltage and special low voltage, Findings). Still needed from the marina or EEM: which voltage level the marina is on, its contracted power and the peak-power term, and what the marina charges boat owners (a 20 % surcharge was noted). The tariff shape moves the result more than anything else: smart charging saves about 7 k€ a year in medium voltage and 10 k€ in special low voltage, against 25 k€ with the placeholder.');
-            h += it('Supplier quotes', 'waiting for data', 't1', 'Installed cost of battery, solar and chargers in Madeira, and the battery life guaranteed. They replace the reference values of 1.0 €/Wp, 0.015 €/Wp a year and 650 €/kWh (Spanish commercial prices and European storage ranges) and the battery-ageing assumption. Madeira shipping and tax may push them up. Quotes have been requested from Aqua superPower and three other installers.');
-            h += it('Marina and operator data', 'waiting for data', 't1', 'Real arrival and departure times, how many boats would be electric, the grid connection capacity and its contract. This replaces the simulated schedule with the real one.');
-            h += it('Price of exported solar energy', 'needs a number', 't1', 'What the marina would be paid for energy it sends to the grid, under the Madeira self-consumption rules or a retail contract. It moves the solar result more than any further simulation; the Calculator already takes it as an input.');
-            h += it('Value of a recovered trip', 'needs a number', 't1', 'What one extra trip earns the operator (charter price, margin). With it, the break-even column in Findings becomes a yes or no for the grid-limited cases.');
+            var mtc = byId('b4_pv100_b200_eem_mt'), btc = byId('b4_pv100_b200_eem_bte'), smMTe = smartOf(mtc, Object.assign({}, PD, { pp: 0 }));
+            h += it('Electricity tariff', 'partly known', 't1', 'EEM’s 2026 prices, hourly bands and peak-hour power charge are published and simulated (medium voltage; special low voltage without the peak-hour charge). Still needed from the marina or EEM: which voltage level the marina is on, whether it uses the optional daily cycle (it has different peak hours), and what the marina charges boat owners (a 20 % surcharge was noted). The tariff shape moves the result more than anything else: smart charging saves about ' + K(smartOf(mtc, PD)) + ' k€ a year in medium voltage (' + K(smMTe) + ' from energy and ' + K(smartOf(mtc, PD) - smMTe) + ' from the peak-hour charge) and ' + K(smartOf(btc, PD)) + ' k€ in special low voltage (energy only), against 25 k€ with the placeholder.');
+            h += it('Supplier quotes', 'waiting for data', 't1', 'Installed cost of battery, solar and chargers in Madeira, and the battery life guaranteed (cycles to 80 % health). They replace the reference values of 1.0 €/Wp, 0.015 €/Wp a year and 650 €/kWh (Spanish commercial prices and European storage ranges) and the placeholder cycle-life curve of 3,000 cycles. Madeira shipping and tax may push them up. Quotes have been requested from Aqua superPower and three other installers.');
+            h += it('Grid connection quote', 'needs a number', 't1', 'What EEM would charge to raise the connection of the marina from 80 or 120 kW to the power the fleet needs (200 kW for four boats), and the contracted power of the marina today. It settles whether a battery for grid-limited cases beats simply asking for a bigger connection; the Calculator takes the figure as an input.');
+            h += it('Marina and operator data', 'waiting for data', 't1', 'Real arrival and departure times, how many boats would be electric, the grid connection capacity and its contract, and the annual consumption and load profile of the whole marina (lighting, buildings, shore power). The consumption decides how much solar is allowed under the 120 % rule and how much of it the marina uses itself. This replaces the simulated schedule with the real one.');
+            h += it('Price of exported solar energy', 'needs a number', 't1', 'What the marina would be paid for energy it sends to the grid. The rule in force pays 0.9 × the monthly OMIE day-ahead average (Despacho 240/2020) and a new despacho is expected (DLR 9/2026/M, art. 9); the 0.05 €/kWh used here is to be checked against the OMIE series. It moves the solar result more than any further simulation; the Calculator already takes it as an input.');
+            h += it('Value of a recovered trip', 'needs a number', 't1', 'The net margin one extra trip brings the marina, directly or through the berth fee, and who earns it (the marina or the boat operators). With it, the break-even column in Findings becomes a yes or no for the grid-limited cases.');
             h += '</section><section><h2>What we can still build</h2>';
             h += it('Mixed fleets', 'built, to discuss', 't2', 'The simulator can already take small RIBs, tourist catamarans and luxury catamarans in the same marina, each with its own motor power, battery and charger. Preliminary runs exist; they are not in the results above. Before using them we need real battery sizes and the share of each type in the marina, and the single battery sized for the whole marina should be revisited for the smallest boats.');
             h += it('Staggered departures', 'possible', '', 'Let the scheduler delay boats that are not in a hurry, so fewer trips are lost under a grid limit.');
-            h += it('Contracted power and connection fee', 'possible', '', 'Add the cost of the grid connection itself, so the dashboard can compare a bigger connection against a battery.');
+            h += it('Grid connection comparison', 'built, waits for a quote', 't2', 'The Calculator and Findings compare a bigger connection with a battery, using the contracted-power charge of EEM’s tariff. The cost of raising the connection is an empty input until EEM gives a figure.');
+            h += it('Battery wear in the optimiser', 'possible', '', 'Put a cost per cycle in the optimiser so it stops cycling for very small gains. The battery would last longer and earn a little less. It needs the vendor’s cycle-life curve first and a new set of runs.');
+            h += it('Other marina consumption', 'possible', '', 'Add the marina’s own load to the simulation, so solar is used on site instead of exported. It needs the consumption data above.');
+            h += it('Fleet growth', 'possible', '', 'Let the fleet grow over the 20 years, so smart charging and the plant are judged on a growing load instead of a fixed one.');
             h += it('Wider tariff selector in the dashboard', 'possible', '', 'Choose the tariff shape in the Calculator and recompute from simulated runs, instead of reading it from the table in Findings.');
             h += it('Live data and a digital twin', 'later', '', 'Replace the simulated schedule with metered data from the marina, so the same model follows the real site and keeps the plan up to date.');
             h += '</section><section><h2>To decide together</h2><div class="box">';
             h += '<p>1. Do mixed fleets go into the thesis as an extension, or stay as future work?</p>';
             h += '<p>2. Do we present medium voltage as the reference, with special low voltage as an alternative, until the marina confirms its voltage level?</p>';
             h += '<p>3. Which number do we use for the value of a recovered trip, and who can provide it?</p>';
+            h += '<p>4. Do we present the battery as not repaying at today’s prices with the placeholder life curve, or wait for the vendor’s curve and quotes before concluding?</p>';
+            h += '<p>5. Do we ask EEM, directly or through the professor, for an indicative connection quote before the freeze on 12 November?</p>';
             h += '</div></section>';
-            h += '<section><h2>Calendar</h2><p class="note">Results and code are frozen on 12 November, nothing new is simulated after that. Delivery of the project on 13 November, thesis text in early December.</p></section>';
+            h += '<section><h2>Calendar</h2><p class="note">Results and code are frozen on 12 November, nothing new is simulated after that. Quotes, prices and the connection cost can still be entered in the Calculator afterwards, without new simulations. Delivery of the project on 13 November, thesis text in early December.</p></section>';
             $('p-next').innerHTML = h;
         }
         function showTab(name) {
@@ -1205,7 +1378,7 @@
                 if (!groups[gk]) { groups[gk] = document.createElement('optgroup'); groups[gk].label = gk; sel.appendChild(groups[gk]) }
                 var o = document.createElement('option'); o.value = c.id; o.textContent = c.name; groups[gk].appendChild(o);
             });
-            var RANGE = { pvp: [0.1, 3.5], bp: [20, 900], kp: [0, 300], pvo: [0, 0.06], bo: [0, 4], mult: [0.5, 3], xf: [1, 5], ep: [0, 0.1], eg: [0, 6], pp: [0, 250], tv: [0, 500], dr: [3, 12], hz: [10, 25], lm: [1, 3], dec: [0, 6] };
+            var RANGE = { pvp: [0.1, 3.5], bp: [20, 900], kp: [0, 300], pvo: [0, 0.06], bo: [0, 4], mult: [0.5, 3], xf: [1, 5], ep: [0, 0.1], eg: [0, 6], pp: [0, 250], cp: [0, 60], tv: [0, 500], dr: [3, 12], hz: [10, 25], lm: [1, 3], dec: [0, 6] };
             Object.keys(RANGE).forEach(function (id) {
                 var n = $(id), r = document.createElement('input');
                 r.type = 'range'; r.min = RANGE[id][0]; r.max = RANGE[id][1]; r.step = n.step; r.value = n.value; r.id = id + '_r';
@@ -1215,8 +1388,8 @@
                 n.addEventListener('input', function () { r.value = n.value });
             });
             sel.onchange = function () { select(sel.value) };
-            ['pvp', 'bp', 'kp', 'pvo', 'bo', 'mult', 'xf', 'ep', 'eg', 'pp', 'tv', 'dr', 'hz', 'lm', 'dec'].forEach(function (id) { $(id).oninput = render });
-            $('reset').onclick = function () { for (var k in DEF) { $(k).value = DEF[k]; $(k + '_r').value = DEF[k] } render() };
+            ['pvp', 'bp', 'kp', 'pvo', 'bo', 'mult', 'xf', 'ep', 'eg', 'pp', 'cp', 'cu', 'tv', 'dr', 'hz', 'lm', 'dec'].forEach(function (id) { $(id).oninput = render });
+            $('reset').onclick = function () { for (var k in DEF) { $(k).value = DEF[k]; $(k + '_r').value = DEF[k] } $('cu').value = ''; render() };
             $('be').onclick = function () {
                 var p = inputs(), be = breakEven(cur, p); if (!be) return;
                 $('pvp').value = (Math.floor(p.pvp * be / 0.01) * 0.01).toFixed(2);
