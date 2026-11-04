@@ -54,6 +54,8 @@ def parse_row(r):
     dx = float(r.get("der_excess_eur_week") or 0)
     xsav = (sx - dx) * YEAR_WEEKS if has_x else None
     xsmart = (bx - sx) * YEAR_WEEKS if has_x else None
+    exp_week = r.get("der_export_kwh_week")
+    exp = float(exp_week) * YEAR_WEEKS if exp_week not in (None, "") else None
     sav = float(r["annual_savings_eur"]) - ((used - 1.0) * xsav if has_x else 0.0)
     smart = (float(sched) * YEAR_WEEKS if sched not in (None, "") else 0.0) - (
         (used - 1.0) * xsmart if has_x else 0.0)
@@ -63,7 +65,10 @@ def parse_row(r):
     asg = r.get("assigned_trips_week")
     default_kw = min(50.0, bess / 4.0) if bess > 0 else 0.0
     bkw = float(r.get("bess_kw") or default_kw) if bess > 0 else 0.0
-    return (boats, pv, bess, cap, bkw), {
+    tar = (r.get("tariff") or "default_tariff")
+    tar = "placeholder" if tar in ("default_tariff", "") else tar
+    return (boats, pv, bess, cap, bkw, tar), {
+        "tar": tar,
         "boats": boats,
         "pv": round(pv),
         "b": round(bess),
@@ -72,6 +77,8 @@ def parse_row(r):
         "xsav": xsav,
         "xsmart": xsmart,
         "thr": float(r.get("excess_threshold_kw") or 80),
+        "exp": exp,
+        "ep0": float(r.get("export_price_eur_kwh") or 0.0),
         "cap": round(cap),
         "bkw": round(bkw),
         "tb": trips[0], "ts": trips[1], "td": trips[2],
@@ -84,23 +91,58 @@ def mean_or_none(values):
     return None if any(v is None for v in values) else sum(values) / len(values)
 
 
+def like_for_like(path, boats):
+    """Smart-charging saving per year priced per served trip, season by season, from the *_seasons.csv
+    beside the summary: (baseline cost per trip - scheduled cost per trip) x trips the scheduled run served.
+    Smart charging does not always serve the same number of trips as charging on arrival, so the plain
+    cost difference is not like for like. None when the seasons file is missing."""
+    sp = path[:-4] + "_seasons.csv"
+    if not os.path.exists(sp):
+        return None
+    total, found = 0.0, False
+    try:
+        with open(sp, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                if int(r["num_boats"]) != boats:
+                    continue
+                a = float(r["assigned_trips"])
+                nb, ns = a * float(r["baseline_service_level"]), a * float(r["scheduled_service_level"])
+                if nb <= 0 or ns <= 0:
+                    return None
+                total += float(r["weeks"]) * (float(r["baseline_weekly_eur"]) / nb - float(r["scheduled_weekly_eur"]) / ns) * ns
+                found = True
+    except (KeyError, ValueError):
+        return None
+    return total if found else None
+
+
 def read_rows(paths, average=False):
     """Rows of the same boats + plant size: the last one wins, or their mean with average=True."""
     groups = {}
     for path in paths:
         with open(path, newline="", encoding="utf-8") as f:
-            for r in csv.DictReader(f):
-                key, case = parse_row(r)
-                groups.setdefault(key, []).append(case)
+            file_rows = list(csv.DictReader(f))
+        per_boats = {}
+        for r in file_rows:
+            per_boats[int(r["num_boats"])] = per_boats.get(int(r["num_boats"]), 0) + 1
+        for r in file_rows:
+            key, case = parse_row(r)
+            b = int(r["num_boats"])
+            case["smartl"] = like_for_like(path, b) if per_boats[b] == 1 else None
+            groups.setdefault(key, []).append(case)
     cases = []
     for rows in groups.values():
         if not average:
             rows = rows[-1:]
+        # Runs that recorded the exported energy replace older runs of the same case.
+        fresh = [x for x in rows if x.get("exp") is not None]
+        if fresh:
+            rows = fresh if average else fresh[-1:]
         c = dict(rows[0])
-        for k in ("sav", "smart", "xsav", "xsmart", "life", "tb", "ts", "td", "asg"):
+        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl", "life", "tb", "ts", "td", "asg"):
             c[k] = mean_or_none([x[k] for x in rows])
         c["runs"] = len(rows)
-        for k in ("sav", "smart", "xsav", "xsmart"):
+        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl"):
             c[k] = None if c[k] is None else round(c[k])
         for k in ("tb", "ts", "td", "asg"):
             c[k] = None if c[k] is None else round(c[k], 2)
@@ -151,10 +193,10 @@ def main():
     global CHARGER_KW
     CHARGER_KW = args.charger_kw
     cases = read_rows(paths, args.average)
-    cases.sort(key=lambda c: (c["boats"], c["pv"], c["b"], c["bkw"], -c["cap"]))
+    cases.sort(key=lambda c: (c["tar"] != "placeholder", c["tar"], c["boats"], c["pv"], c["b"], c["bkw"], -c["cap"]))
     for c in cases:
-        c["name"] = label(c)
-        c["id"] = f'b{c["boats"]}_pv{c["pv"]}_b{c["b"]}' + (f'_p{c["bkw"]}' if custom_power(c) else "") + (f'_cap{c["cap"]}' if capped(c) else "")
+        c["name"] = label(c) + ("" if c["tar"] == "placeholder" else " · " + c["tar"].replace("eem_", "EEM ").upper())
+        c["id"] = f'b{c["boats"]}_pv{c["pv"]}_b{c["b"]}' + (f'_p{c["bkw"]}' if custom_power(c) else "") + (f'_cap{c["cap"]}' if capped(c) else "") + ("" if c["tar"] == "placeholder" else "_" + c["tar"])
         c["g"] = f'{c["boats"]} boats'
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:

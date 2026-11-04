@@ -24,6 +24,8 @@ files = (
     + summaries("results/rep_base_*.csv")
     + [f for f in summaries("results/sizing120/*.csv")
        if "pv100" not in f and "b200p100_n4" not in f]
+    + summaries("results/export/*.csv")
+    + summaries("results/eem/*.csv")
 )
 print(len(files), "result files")
 sys.exit(subprocess.call([sys.executable, "export_dashboard_data.py", "--average"] + files))
