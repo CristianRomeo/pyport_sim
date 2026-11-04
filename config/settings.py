@@ -23,6 +23,8 @@ class Settings:
         use_optimizer: If True, use optimization for scheduling; if False, use rule-based control.
         power_limit_mode: If True, enforce contracted power limit without optimization (baseline);
             if False, charging is unlimited.
+        bess_rule_based: If True and use_optimizer is False, the battery follows simple
+            rules (PV surplus, peak shaving, off-peak charging) instead of only storing PV surplus.
         trip_schedule: Trip departure times per day as a tuple of (hour_utc, slot_index);
             e.g. ((9, 0), (14, 1)) for 09:00 slot 0 and 14:00 slot 1.
     """
@@ -32,6 +34,7 @@ class Settings:
     db_path: str = "port_simulation.db"
     use_optimizer: bool = False
     power_limit_mode: bool = False
+    bess_rule_based: bool = False
     trip_schedule: tuple = ((9, 0), (13, 1), (17, 2))
 
     def __post_init__(self):

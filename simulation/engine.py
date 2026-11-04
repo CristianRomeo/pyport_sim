@@ -930,8 +930,16 @@ class SimulationEngine:
         # Calculate available power (contracted power - current usage)
         current_power_used = self._get_current_power_usage()
         pv_production = sum(pv.current_production for pv in self.port.pv_systems)
+        bess_extra = (
+            sum(
+                b.get_max_discharge_power_available(self.settings.timestep)
+                for b in self.port.bess_systems
+            )
+            if self._rule_based_active()
+            else 0.0
+        )
         available_power = (
-            self.port.contracted_power + pv_production - current_power_used
+            self.port.contracted_power + pv_production + bess_extra - current_power_used
         )
 
         # Assign boats to chargers (FCFS with power limit enforcement)
@@ -978,7 +986,7 @@ class SimulationEngine:
         # If power limit is hit, proportionally reduce charging power for already-charging boats
         # This ensures we don't exceed the limit
         total_power_used = self._get_current_power_usage()
-        max_total_power = self.port.contracted_power + pv_production
+        max_total_power = self.port.contracted_power + pv_production + bess_extra
 
         if (
             total_power_used > max_total_power + 0.1
@@ -1129,6 +1137,8 @@ class SimulationEngine:
         # Check if we're using optimizer schedules
         if self.use_optimizer:
             self._update_bess_with_schedule()
+        elif self._rule_based_active():
+            self._update_bess_rule_based()
         else:
             self._update_bess_default()
 
@@ -1200,6 +1210,62 @@ class SimulationEngine:
                     bess.idle()
         # Note: Any remaining excess_pv after BESS charging will be tracked as
         # power_active_export in _save_measurements()
+
+    def _rule_based_active(self) -> bool:
+        return (
+            not self.use_optimizer
+            and getattr(self.settings, "bess_rule_based", False)
+            and bool(self.port.bess_systems)
+        )
+
+    def _cheapest_price_today(self) -> float:
+        """Lowest tariff price of the current day (cached per date)."""
+        day = self.current_datetime.date()
+        cache = getattr(self, "_cheapest_cache", None)
+        if cache is None or cache[0] != day:
+            base = self.current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+            prices = [
+                self.port.get_tariff_price(base + timedelta(minutes=15 * k))
+                for k in range(96)
+            ]
+            cache = (day, min(prices))
+            self._cheapest_cache = cache
+        return cache[1]
+
+    def _update_bess_rule_based(self):
+        """Battery rules without optimiser or forecast (see patch_plain.py)."""
+        step = self.settings.timestep
+        pv = sum(p.current_production for p in self.port.pv_systems)
+        load = sum(
+            c.power for c in self.port.chargers if c.state == ChargerState.CHARGING
+        )
+        grid_limit = self.port.contracted_power
+        price = self.port.get_tariff_price(self.current_datetime)
+        cheap = price <= self._cheapest_price_today() + 1e-9
+        for bess in self.port.bess_systems:
+            net = load - pv  # what the grid would have to supply
+            if net > 0.1 and (net > grid_limit or not cheap):
+                want = net if not cheap else net - grid_limit
+                power = min(want, bess.get_max_discharge_power_available(step))
+                if power > 0.1:
+                    bess.discharge(power, step)
+                    continue
+                bess.idle()
+            elif pv > load + 0.1:
+                power = min(pv - load, bess.get_max_charge_power_available(step))
+                if power > 0.1:
+                    bess.charge(power, step)
+                else:
+                    bess.idle()
+            elif cheap and load <= 0.1:
+                head = grid_limit - max(net, 0.0)
+                power = min(head, bess.get_max_charge_power_available(step))
+                if power > 0.1:
+                    bess.charge(power, step)
+                else:
+                    bess.idle()
+            else:
+                bess.idle()
 
     def _update_bess_default(self):
         """

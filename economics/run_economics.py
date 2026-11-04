@@ -153,6 +153,42 @@ def grid_peak_kw(
     )
 
 
+def grid_peak_hour_kw(
+    db_manager: DatabaseManager,
+    grid_source_name: str,
+    tariff_json_path: str,
+    summer_time: bool,
+) -> float:
+    """Average grid import power (kW) over the peak hours: the basis of the peak-hour power charge."""
+    price_fn = load_tariff_price_fn(tariff_json_path)
+    kwh = hours = 0.0
+    for ts, p, dt, _ in _import_intervals(db_manager, grid_source_name, price_fn):
+        t = datetime.fromisoformat(ts)
+        h = t.hour + t.minute / 60.0
+        peak = (10.5 <= h < 13.0 or 20.5 <= h < 22.0) if summer_time else (10.5 <= h < 12.0 or 18.5 <= h < 21.0)
+        if peak:
+            kwh += p * dt
+            hours += dt
+    return kwh / hours if hours else 0.0
+
+
+def grid_export_kwh(db_manager: DatabaseManager, grid_source_name: str) -> float:
+    """Energy (kWh) the run sent to the grid: the logged power_active_export, integrated over time."""
+    source = db_manager.get_source(source_name=grid_source_name)
+    if source is None:
+        raise ValueError(f"No source named '{grid_source_name}' found")
+    metric_id = db_manager.get_metric_id("power_active_export")
+    rows = db_manager.get_records(
+        "measurements", source_id=source["source_id"], metric_id=metric_id
+    )
+    kwh = 0.0
+    for prev_row, row in zip(rows, rows[1:]):
+        t_prev = datetime.fromisoformat(prev_row["timestamp"])
+        t_curr = datetime.fromisoformat(row["timestamp"])
+        kwh += float(prev_row["value"]) * (t_curr - t_prev).total_seconds() / 3600.0
+    return kwh
+
+
 def save_economic_series(
     db_manager: DatabaseManager,
     metric_name: str,

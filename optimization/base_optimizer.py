@@ -155,6 +155,7 @@ class BaseOptimizer:
             trip_events,
             departure_ctx,
             bess_soc,
+            pv_export,
         )
 
         model.optimize()
@@ -616,6 +617,7 @@ class BaseOptimizer:
         trip_events,
         departure_ctx,
         bess_soc,
+        pv_export=None,
     ):
         depart_at = departure_ctx["depart_at"]
         depart_slots = departure_ctx["depart_slots"]
@@ -624,6 +626,14 @@ class BaseOptimizer:
         energy_cost = quicksum(
             grid_import[t] * tariff_price[t] * self.timestep_hours for t in timesteps
         )
+
+        # Revenue for the PV surplus sent to the grid (0 unless the port has export_price_eur_kwh).
+        export_price = getattr(self.port, "export_price_eur_kwh", 0.0)
+        export_revenue = 0
+        if export_price and pv_export is not None:
+            export_revenue = export_price * quicksum(
+                pv_export[t] * self.timestep_hours for t in timesteps
+            )
 
         n_boats = len(boat_list)
         base_reward = 1000.0
@@ -669,7 +679,11 @@ class BaseOptimizer:
             bess_end_penalty = quicksum(bess_shortfall_terms)
 
         model.setObjective(
-            -ready_reward + missed_trip_penalty + energy_cost + bess_end_penalty,
+            -ready_reward
+            + missed_trip_penalty
+            + energy_cost
+            - export_revenue
+            + bess_end_penalty,
             "minimize",
         )
 
