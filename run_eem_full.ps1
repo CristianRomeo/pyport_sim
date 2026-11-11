@@ -18,7 +18,7 @@ if (-not (Test-Path (Join-Path $repo "assets\tariff\eem_mt_winter.json"))) {
     exit 1
 }
 $work = $repo + "_f" + $Window
-$out = Join-Path $repo "results\eem"
+$out = Join-Path $repo "results\eem_mv"
 New-Item -ItemType Directory -Force $out | Out-Null
 if (Test-Path $work) { Remove-Item -Recurse -Force $work }
 robocopy $repo $work /E /XD results old_results results_summary .git __pycache__ /XF *.db /NFL /NDL /NJH /NJS /NP | Out-Null

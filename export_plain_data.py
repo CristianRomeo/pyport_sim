@@ -1,4 +1,4 @@
-"""Writes dashboard/plain.js from the CSVs of run_plain_series.ps1 (results/plain).
+"""Writes dashboard/plain.js from the plain_*.csv files of the medium-voltage series (results/peakhour_mv and results/sweep_mv).
 
 Each entry is one plant with charging on arrival and the rule-based battery (no smart charging),
 averaged over the seeds, with the same fields the dashboard uses for the other cases.
@@ -7,16 +7,20 @@ Run from the repo root:  python export_plain_data.py
 import csv, glob, json, os, sys, collections
 
 YW = 365.0 / 7.0
-src = sys.argv[1] if len(sys.argv) > 1 else os.path.join("results", "plain")
+srcs = [sys.argv[1]] if len(sys.argv) > 1 else [os.path.join("results", "peakhour_mv"), os.path.join("results", "sweep_mv"), os.path.join("results", "plain_grid")]
 out = sys.argv[2] if len(sys.argv) > 2 else os.path.join("dashboard", "plain.js")
 groups = collections.defaultdict(list)
-for path in sorted(glob.glob(os.path.join(src, "plain_*.csv"))):
+for path in sorted(p for s in srcs for p in glob.glob(os.path.join(s, "plain_*.csv"))):
     if path.endswith("_seasons.csv"):
         continue
     for r in csv.DictReader(open(path, newline="", encoding="utf8")):
         key = (int(r["num_boats"]), round(float(r["pv_kwp"])), round(float(r["bess_kwh"])),
                round(float(r["bess_kw"] or 0)), round(float(r["contracted_power_kw"])))
         groups[key].append(r)
+
+def power(r, k):
+    return float(r.get(k) or 0)
+
 
 def mean(rows, f):
     v = [f(r) for r in rows]
@@ -28,7 +32,9 @@ for key in sorted(groups):
     boats, pv, b, bkw, cap = key
     entries.append({
         "boats": boats, "pv": pv, "b": b, "bkw": bkw, "cap": cap,
-        "sav": round(mean(rows, lambda r: float(r["annual_savings_eur"])), 1),
+        # the CSV savings include the power charges: the dashboard adds them from the kW in peakhour.js
+        "sav": round(mean(rows, lambda r: float(r["annual_savings_eur"]) - (power(r, "baseline_power_eur_year") - power(r, "der_power_eur_year"))), 1),
+        "ed": round(mean(rows, lambda r: float(r["der_weekly_eur"]) * YW - power(r, "der_power_eur_year")), 1),
         "xsav": round(mean(rows, lambda r: (float(r["baseline_excess_eur_week"] or 0) - float(r["der_excess_eur_week"] or 0)) * YW), 1),
         "exp": round(mean(rows, lambda r: float(r["der_export_kwh_week"] or 0) * YW), 1),
         "ep0": float(rows[0]["export_price_eur_kwh"] or 0),

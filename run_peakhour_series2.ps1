@@ -21,7 +21,7 @@ if (-not (Test-Path (Join-Path $repo "assets\tariff\eem_mt_winter.json"))) {
     exit 1
 }
 $work = $repo + "_k" + $Window
-$out = Join-Path $repo "results\peakhour"
+$out = Join-Path $repo "results\peakhour_mv"
 New-Item -ItemType Directory -Force $out | Out-Null
 
 if (Test-Path $work) { Remove-Item -Recurse -Force $work }

@@ -201,6 +201,25 @@ def save_economic_series(
     records = [(ts, source_id, metric_id, str(value)) for ts, value in series]
     db_manager.save_records_batch("measurements", records)
 
+# EEM 2026 medium-voltage fixed and power terms (ERSE Directive 10/2025, art. 38 a)
+MV_FIXED_EUR_DAY = 0.0164
+MV_CONTRACTED_EUR_KW_DAY = 0.0458
+MV_PEAK_HOUR_EUR_KW_DAY = 0.2435
+
+
+def mv_power_cost_year(contracted_kw: float, peakhour_kw_weeks: float) -> float:
+    """
+    Annual MV fixed + power terms (EUR).
+
+    contracted_kw: grid connection / contracted power (kW).
+    peakhour_kw_weeks: sum over the simulated weeks of the average peak-hour import
+        (P_peak = E_peak / H_peak, kW) times the weeks of the year each week stands for
+        (= ph_sum in boats_scaling_experiment.py).
+    """
+    days = 365.0
+    return (MV_FIXED_EUR_DAY * days
+            + MV_CONTRACTED_EUR_KW_DAY * contracted_kw * days
+            + MV_PEAK_HOUR_EUR_KW_DAY * peakhour_kw_weeks * 7.0)
 
 def main():
     parser = argparse.ArgumentParser(description="Compute economic KPIs for a PyPort run")
@@ -224,3 +243,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

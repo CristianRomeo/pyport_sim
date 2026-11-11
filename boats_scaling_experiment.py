@@ -113,7 +113,7 @@ from models import Port, Boat, Charger, PV, BESS, BESSControlStrategy
 from config import Settings, SimulationMode
 from database import DatabaseManager
 from simulation import SimulationEngine
-from economics.run_economics import grid_cost_split, grid_peak_kw, grid_export_kwh, grid_peak_hour_kw
+from economics.run_economics import grid_cost_split, grid_peak_kw, grid_export_kwh, grid_peak_hour_kw, mv_power_cost_year
 
 PEAKHOUR = {}   # average import power in the peak hours of the last run of each scenario tag, kW
 SUMMER_TIME = {"winter": False}   # every other simulated week is in summer time
@@ -560,6 +560,11 @@ def main():
 
         # Year totals, then the "average week" that reproduces them when the
         # rest of the pipeline multiplies a week by 365 / 7.
+        power_cost = {k: mv_power_cost_year(peak_max[k], ph_sum[k]) for k in ph_sum}
+        annual_baseline += power_cost["base"]
+        annual_der += power_cost["der"]
+        if not args.skip_scheduled:
+            annual_sched += power_cost["sched"]
         baseline_weekly = annual_baseline / year_weeks
         der_weekly = annual_der / year_weeks
         baseline_service = completed_base / assigned_total if assigned_total else float("nan")
@@ -661,6 +666,9 @@ def main():
             "npv_eur": round(result.npv_eur, 2),
             "bess_replacement_pv_eur": round(result.replacement_cost_pv_eur, 2),
             "bess_life_years": round(bess_life, 1),
+            "baseline_power_eur_year": round(power_cost["base"], 2),
+            "scheduled_power_eur_year": "" if args.skip_scheduled else round(power_cost["sched"], 2),
+            "der_power_eur_year": round(power_cost["der"], 2),
         })
 
     print("\n" + "=" * 122)

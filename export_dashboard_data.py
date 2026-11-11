@@ -8,6 +8,10 @@ Usage (from the repo root):
 Each CSV row written by garmin_scaling_experiment.py becomes one case:
   sav   = annual_savings_eur   (scheduled baseline - DER, EUR per year)
   smart = scheduling_savings_eur_week * 365 / 7 (plain - scheduled baseline)
+  eb / es / ed = energy cost per year, without the power charges, of charging on arrival, smart charging and
+          the plant (EUR per year, the export revenue at the run's export price already taken out). With the power
+          charges (fixed term, contracted power on the real peak, peak-hour power) the dashboard adds, for the
+          grid limit of the case, the cost of running the marina.
   life  = bess_life_years      (0 when there is no battery)
   xsav / xsmart = EUR per year of grid import above the power threshold, at the
           normal tariff, that the plant (xsav) and smart charging (xsmart) avoid.
@@ -59,6 +63,20 @@ def parse_row(r):
     sav = float(r["annual_savings_eur"]) - ((used - 1.0) * xsav if has_x else 0.0)
     smart = (float(sched) * YEAR_WEEKS if sched not in (None, "") else 0.0) - (
         (used - 1.0) * xsmart if has_x else 0.0)
+    # The runs of the medium-voltage series write the power charges (fixed term, contracted power on the real peak,
+    # average power in the peak hours) into the weekly cost. The dashboard computes those charges itself, from the kW
+    # saved in peakhour.js and prices that the user can change, so they are taken out of the savings here.
+    def num(k):
+        v = r.get(k)
+        return float(v) if v not in (None, "") else None
+    bpw, spw, dpw = num("baseline_power_eur_year"), num("scheduled_power_eur_year"), num("der_power_eur_year")
+    if spw is not None and dpw is not None:
+        sav -= spw - dpw
+    if bpw is not None and spw is not None:
+        smart -= bpw - spw
+    wk = [num("baseline_weekly_eur"), num("scheduled_weekly_eur"), num("der_weekly_eur")]
+    pw = [bpw, spw, dpw]
+    en = [None if (w is None or p is None) else w * YEAR_WEEKS - p for w, p in zip(wk, pw)]
     cap = float(r.get("contracted_power_kw") or 0)
     trips = [r.get(k) for k in ("baseline_trips_served", "scheduled_trips_served", "der_trips_served")]
     trips = [float(t) for t in trips] if all(t not in (None, "") for t in trips) else [None] * 3
@@ -81,6 +99,7 @@ def parse_row(r):
         "ep0": float(r.get("export_price_eur_kwh") or 0.0),
         "cap": round(cap),
         "bkw": round(bkw),
+        "eb": en[0], "es": en[1], "ed": en[2],
         "tb": trips[0], "ts": trips[1], "td": trips[2],
         "asg": float(asg) if asg not in (None, "") else None,
         "life": float(r.get("bess_life_years") or 0) if bess > 0 else 0.0,
@@ -139,10 +158,10 @@ def read_rows(paths, average=False):
         if fresh:
             rows = fresh if average else fresh[-1:]
         c = dict(rows[0])
-        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl", "life", "tb", "ts", "td", "asg"):
+        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl", "life", "tb", "ts", "td", "asg", "eb", "es", "ed"):
             c[k] = mean_or_none([x[k] for x in rows])
         c["runs"] = len(rows)
-        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl"):
+        for k in ("sav", "smart", "xsav", "xsmart", "exp", "smartl", "eb", "es", "ed"):
             c[k] = None if c[k] is None else round(c[k])
         for k in ("tb", "ts", "td", "asg"):
             c[k] = None if c[k] is None else round(c[k], 2)

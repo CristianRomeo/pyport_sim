@@ -5,7 +5,17 @@ import json
 import pytest
 
 from economics.run_economics import compute_grid_energy_cost, grid_cost_split, grid_peak_kw
+from economics.run_economics import mv_power_cost_year
 
+
+def test_mv_power_cost_year_matches_hand_calculation():
+    year_weeks = 365 / 7
+    expected = 365 * (0.0164 + 0.0458 * 100 + 0.2435 * 50)
+    assert mv_power_cost_year(100, 50 * year_weeks) == pytest.approx(expected)
+
+
+def test_mv_power_cost_year_no_load_is_fixed_term_only():
+    assert mv_power_cost_year(0, 0) == pytest.approx(365 * 0.0164)
 
 class FakeDb:
     """Just the three DatabaseManager calls the cost helpers use."""
