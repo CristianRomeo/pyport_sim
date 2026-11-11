@@ -4,12 +4,10 @@ scan the number of boats/chargers served by a FIXED PV+BESS installation
 and find the fleet size at which the investment's payback/NPV turns
 favourable.
 
-All technical parameters (PV, BESS, charger, vessel) are sourced from
-data_variable_inventory.xlsx - see the comments next to each constant
-below for the inventory ID and whether the value is a confirmed Funchal
-figure or the PyPort reference default (used where Funchal-specific data
-is still "To define"). Do not change these without updating the matching
-inventory row/comment.
+All technical parameters (PV, BESS, charger, vessel) are the constants
+below; the comment next to each says whether the value is a Funchal figure
+or the PyPort reference default (used where Funchal data is not available).
+Section 6.3.2 of the thesis lists them with their status.
 
 For each boat count N and each representative week (winter, spring,
 summer, autumn by default, see SEASONS) this script runs THREE 7-day
@@ -46,7 +44,7 @@ is a capacity shortfall, not a real saving, and cost figures should never
 be read without checking the service level alongside them.
 
 CONTRACTED POWER NOTE: the grid-import limit (contracted_power) is not a
-sourced Funchal value (inventory GRD-01: still to be requested from the
+sourced Funchal value (still to be requested from the
 marina/EEM). With a fixed 80 kW cap the grid, not the optimizer, made most
 trips infeasible as the fleet grew (baseline service level fell to ~77 %
 at 4 boats), which distorted the savings and the NPV. Following the
@@ -121,52 +119,47 @@ from economics.capex_opex import CapexBreakdown, OpexBreakdown
 from economics.payback import evaluate_investment, bess_replacement_schedule, bess_price_decline_for_case
 from economics.degradation import bess_life_years_from_weeks
 
-# All values below are taken from data_variable_inventory.xlsx (sheet
-# "Variables"), preferring a confirmed Funchal value where one exists and
-# falling back to the PyPort reference value (traceable to the original
-# PyPort validation thesis, Garces 2026) where Funchal data is still
-# "To define". Previous versions of this script used ad hoc/back-calculated
-# numbers (e.g. a 4.6 kW "shore charger" inferred from one old simulation
-# run) instead of sourced data - replaced here per inventory ID.
+# A Funchal value is used where one exists; otherwise the PyPort reference value
+# (the original PyPort validation thesis, Garces 2026).
 
-# PV-01: PyPort ref = 50 kWp DC; Funchal reference case ~100 kWp (SMA STP
+# PV size: PyPort ref = 50 kWp DC; Funchal reference case ~100 kWp (SMA STP
 # 50-41 inverter, 50 kW AC / 75 kW DC, typical oversizing 1.3-1.5x). Using
 # the Funchal reference value.
 PV_KW = 100.0
 
-# BES-01/02/03: PyPort ref = 200 kWh capacity, 50 kW max charge/discharge.
+# Battery size and power: PyPort ref = 200 kWh capacity, 50 kW max charge/discharge.
 # Funchal datasheet gives only per-module figures (8.28-22.08 kWh/module,
 # scalable), no single system-level total yet - using PyPort ref.
 BESS_KWH = 200.0
 BESS_KW = 50.0
-# BES-04: PyPort ref = 0.90; Funchal datasheet states round-trip efficiency
+# Battery efficiency: PyPort ref = 0.90; Funchal datasheet states round-trip efficiency
 # >= 96%. Using the Funchal value (0.96) - note this model applies a single
 # efficiency factor per charge/discharge event, so if that round-trip figure
 # needs splitting into one-way charge/discharge efficiencies this should be
 # revisited.
 BESS_EFFICIENCY = 0.96
 
-# EVS-01/02/03: PyPort ref = 22 kW AC, eta=0.95, 1:1 charger:boat ratio -
+# Charger: PyPort ref = 22 kW AC, eta=0.95, 1:1 charger:boat ratio -
 # this is also the exact charger spec used in PyPort's own Funchal pier
 # validation scenario (Garces 2026, Sec. 3.3), so it is the most defensible
 # "real" value available, not a placeholder. The actual EVSE product being
-# quoted (Aqua superPower Aqua 75, EVS-01 notes) is rated even higher
+# quoted (Aqua superPower Aqua 75) is rated even higher
 # (75 kW) - 22 kW is already a conservative choice relative to that.
 CHARGER_KW = 22.0
 CHARGER_EFFICIENCY = 0.95
 
-# VES-01/02/03/04/06: PyPort reference vessel. Funchal fleet data (VES-07)
+# Vessel: PyPort reference vessel. Funchal fleet data
 # is real but highly heterogeneous (12 kW electric hybrid up to 375 kW
 # diesel per engine, across 7 different operators) and no single
 # representative electrifiable vessel has been confirmed yet for the case
 # study (range_speed and a Funchal-specific battery_capacity are still
-# "To define" in the inventory) - so the PyPort reference vessel is used
+# undefined) - so the PyPort reference vessel is used
 # as the most defensible single value, pending that data.
 BOAT_SPEC = dict(motor_power=120, weight=2500, length=8.5,
                   battery_capacity=150, range_speed=15.0, soc=0.30)
 
 # Boat types for mixed fleets (--fleet-mix). Electric equivalents assumed from the
-# Funchal inventory (VES-07), not manufacturer data. charger_kw = charger per boat.
+# Funchal fleet list, not manufacturer data. charger_kw = charger per boat.
 #   ref = PyPort reference vessel (the default when --fleet-mix is not used)
 #   rib = small fast boat / RIB, few passengers
 #   cat = tourist catamaran
@@ -183,7 +176,7 @@ BOAT_TYPES = {
 FLEET_TYPES = None        # list of type names, one per boat, set by --fleet-mix
 FLEET_MIX_LABEL = ""
 
-# GRD-01: grid-import limit, SCALED with the fleet (supervisor decision,
+# Grid-import limit, SCALED with the fleet (supervisor decision,
 # 26 Oct 2026): every charger can run at full power at the same time, so
 # the grid connection never limits the service level and the NPV is not
 # distorted by trips lost to an undersized connection.
@@ -260,7 +253,7 @@ def build_port(num_boats: int, with_der: bool, contracted_power: float, tariff_p
 
     if with_der and PV_KW > 0:
         pv_system = PV(
-            # PV-02: PyPort ref tilt = 30 deg; Funchal real value ~32 deg
+            # PV tilt: PyPort ref tilt = 30 deg; Funchal real value ~32 deg
             # (roughly equal to latitude, standard optimal-tilt rule).
             name="Solar_Array_1", capacity=PV_KW, tilt=32.0, azimuth=180.0,
             latitude=port.lat, longitude=port.lon,
@@ -270,9 +263,8 @@ def build_port(num_boats: int, with_der: bool, contracted_power: float, tariff_p
     if with_der and BESS_KWH > 0:
         bess = BESS(
             # soc_min/max (0.10/0.90): PyPort ref, close to Funchal's
-            # "typically 5-10% / 95-100%" (BES-05/06, no exact datasheet
-            # value published). initial_soc=0.50: matches BES-07's
-            # confirmed Funchal value exactly.
+            # "typically 5-10% / 95-100%" (no exact datasheet value published).
+            # initial_soc=0.50: matches the confirmed Funchal value exactly.
             name="Battery_Storage_1", capacity=BESS_KWH,
             max_charge_power=BESS_KW, max_discharge_power=BESS_KW,
             efficiency=BESS_EFFICIENCY, soc_min=0.10, soc_max=0.90,

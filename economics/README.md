@@ -8,8 +8,8 @@ existing packages (`models/`, `simulation/`, `optimization/`, `database/`,
 ## Why a separate package
 
 Reading PyPort's actual source (not just its published description)
-confirmed three things that shape this design (see Chapter 3's footnotes
-in the thesis):
+confirmed three things that shape this design (see the footnotes of Chapter 3
+of the thesis):
 
 1. `database/db_manager.py`'s `DEFAULT_METRICS` has no cost/CAPEX/OPEX/
    degradation metric at all — the economic layer needs new `metric` rows,
@@ -33,16 +33,17 @@ in the thesis):
 | `tariff_seasonal.py` | EEM Period I–IV resolution + seasonal tariff JSON generator/picker |
 | `degradation.py` | BESS equivalent-cycles / SOH estimate from logged measurements |
 | `capex_opex.py` | CAPEX/OPEX breakdowns + Levelized Cost of Storage (Chapter 2, Eq. lcos) |
+| `payback.py` | Simple and discounted payback, NPV, battery replacement schedule |
 | `run_economics.py` | CLI: turn one completed run's `.db` file into economic KPIs |
 
 ## Status
 
-First working skeleton — the shapes/equations are correct, but several
-numeric defaults are placeholders from the data inventory
-(`data_variable_inventory_EN.xlsx`), marked `TODO` in the code, pending
-real Funchal-specific quotes/data (several are already requested — see the
-Research Log). Do not cite the default `CapexBreakdown`/`OpexBreakdown`
-numbers as final figures.
+The package is complete and tested (65 tests in `tests/economics/`). The
+numeric defaults of `CapexBreakdown` and `OpexBreakdown` are assumptions, not
+supplier quotes, and must not be cited as final figures: `capex_opex.py` says
+which, and Section 5.2.2 of the thesis lists their status. The planner
+(`dashboard/index.html`) recomputes the financial result with the same
+formulas (`payback.py`) and lets the user change every price.
 
 ## Running the tests
 

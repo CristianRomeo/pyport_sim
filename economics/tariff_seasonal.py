@@ -7,7 +7,7 @@ day-of-week + time-of-day JSON (assets/tariff/default_tariff.json). There is
 no concept of EEM's four calendar-quarter tariff periods (Period I: Jan-Mar,
 Period II: Apr-Jun, Period III: Jul-Sep, Period IV: Oct-Dec - source: ERSE
 Regulamento 2/2025, Art. 41), each with its own peak/full/normal-off-peak/
-super-off-peak EUR/kWh prices (GRD-01/02/03 in the inventory).
+super-off-peak EUR/kWh prices (see make_eem_tariffs.py for the 2026 values).
 
 Rather than editing models/port.py to add season-awareness (which would
 touch PyPort's own core), this module picks WHICH of four pre-generated,
@@ -28,8 +28,7 @@ from pathlib import Path
 from typing import Dict
 
 
-# Calendar-quarter definition, resolved 24/09/2026 (Research Log, "Period
-# I/II/III/IV definition"). Source: ERSE Regulamento 2/2025, Art. 36
+# Calendar-quarter definition. Source: ERSE Regulamento 2/2025, Art. 36
 # (mainland) / Art. 41 (Autonomous Regions).
 EEM_PERIODS = {
     "I": (1, 3),    # 1 Jan - 31 Mar
@@ -83,22 +82,16 @@ def generate_tariff_json(
 
     Args:
         period_prices: {"peak": ..., "full": ..., "normal_off_peak": ...,
-            "super_off_peak": ...} in EUR/kWh for this period (GRD-01/02/03).
-            TODO: fill with the confirmed MT vs BTE figures once it's
-            resolved which billing class applies to the marina (Research
-            Log, "Still open: whether the marina is billed on MT or BTE").
-            time_bands: {"peak": [("HH:MM","HH:MM"), ...], "full": [...],
-            "normal_off_peak": [...], "super_off_peak": [...]} - the
-            official EEM time bands. 
-            TODO: these differ between "winter"
-            and "summer" halves of the year per the official EEM cycle
-            (Research Log, GRD-01/02/03) - the exact switch-over dates are
-            not yet confirmed, so for now this generates ONE set of bands;
-            call it twice (winter/summer) once those dates are confirmed,
-            or extend this function to take two band sets.
-            out_path: Where to write the JSON file (e.g.
+            "super_off_peak": ...} in EUR/kWh for this period. Which values
+            apply depends on the voltage level; the thesis uses medium voltage.
+        time_bands: {"peak": [("HH:MM","HH:MM"), ...], "full": [...],
+            "normal_off_peak": [...], "super_off_peak": [...]} - the EEM
+            hour bands. They differ between winter time and summer time, so
+            one set of bands is written per call: call the function once per
+            set (make_eem_tariffs.py does this for the four simulated weeks).
+        out_path: Where to write the JSON file (e.g.
             "economics/tariff_profiles/tariff_period_I.json").
-            currency: Currency code, stored for documentation only (PyPort's
+        currency: Currency code, stored for documentation only (PyPort's
             Port.get_tariff_price does not read it).
     """
     import json

@@ -24,11 +24,10 @@ class TripManager:
     # weekdays, 1 on Saturday, 0 on Sunday). Instead it is driven mainly by
     # season and by public/regional holidays, which fall on any weekday.
     #
-    # TODO: HIGH_SEASON_MONTHS, TRIPS_HIGH_SEASON and TRIPS_LOW_SEASON are
+    # NOTE: HIGH_SEASON_MONTHS, TRIPS_HIGH_SEASON and TRIPS_LOW_SEASON are
     # provisional, based on an informal check with a Funchal boat rental
-    # company (~3 trips/day currently in high season; "probabilmente 2
-    # in inverno, ma non sono sicuro" - Cristian, 09 Oct 2026). Replace with
-    # real operator data once the pending marina email responses arrive.
+    # company (about 3 trips a day in the high season, probably 2 in winter,
+    # not confirmed). Replace them with operator data when available.
     HIGH_SEASON_MONTHS = frozenset({5, 6, 7, 8, 9, 10})  # May-October
     TRIPS_HIGH_SEASON = 3
     TRIPS_LOW_SEASON = 2

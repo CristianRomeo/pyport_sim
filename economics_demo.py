@@ -2,7 +2,7 @@
 economics_demo.py - step-by-step demo of the economic layer (no simulation needed).
 
 It reads the weekly grid costs already produced by the scaling experiment
-(garmin_scaling_results.csv) and walks through every economic calculation
+(results_summary/garmin_seasons3.csv) and walks through every economic calculation
 with the same functions the thesis code uses, printing each step.
 
 Run from the pyport_sim folder:
@@ -83,7 +83,7 @@ def print_sensitivity(args, rows):
 
 def main():
     p = argparse.ArgumentParser(description="Step-by-step economics demo")
-    p.add_argument("--csv", default="garmin_scaling_results.csv")
+    p.add_argument("--csv", default="results_summary/garmin_seasons3.csv")
     p.add_argument("--boats", type=int, default=2)
     p.add_argument("--pv-price", type=float, default=None, help="EUR per Wp (default 2.4)")
     p.add_argument("--bess-price", type=float, default=None, help="EUR per kWh (default 650)")

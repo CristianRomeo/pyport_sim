@@ -1233,7 +1233,7 @@ class SimulationEngine:
         return cache[1]
 
     def _update_bess_rule_based(self):
-        """Battery rules without optimiser or forecast (see patch_plain.py)."""
+        """Battery rules without optimiser or forecast."""
         step = self.settings.timestep
         pv = sum(p.current_production for p in self.port.pv_systems)
         load = sum(

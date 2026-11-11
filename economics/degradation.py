@@ -4,7 +4,7 @@ from typing import List, Optional, Sequence, Tuple
 
 
 # Approximate Li-ion cycle-life curve: (equivalent_full_cycles, remaining_SOH)
-# Placeholder — TODO: replace with cell-specific data once the BESS vendor/model is known
+# Generic curve (assumption): replace it with the data of the cell once the battery model is known
 DEFAULT_CYCLE_LIFE_CURVE: Tuple[Tuple[float, float], ...] = (
     (0, 1.00),
     (500, 0.95),

@@ -19,13 +19,15 @@ Weekly figures are the average week of the year.
 | `b1/`, `b1b/` | Optimiser with the soft next-morning readiness constraint (tested on a copy of the optimiser, not part of the main code) | Ch. 7, verification |
 | `term/` | Test with a fixed terminal reward for the boats' charge (discarded: it distorts the arbitrage) | Ch. 7, verification |
 | `mix/` | Mixed fleets (rib, tourist catamaran, luxury catamaran), experimental, boat types are assumptions | not in the thesis yet |
-| `export/` | Placeholder tariff plus a price of 0.05 EUR/kWh for the PV energy sent to the grid: seven solar/battery sizes (4 boats, seeds 1-3), 100 kWp + 200 kWh under grid limits of 80-150 kW (seeds 1-3) and with 2-10 boats (seed 1). Script: `run_export_series.ps1` | Ch. 7, export price |
-| `eem/` | EEM 2026 tariff (medium voltage `mt_*`, `mtcap120_*`, `f_*`; special low voltage `bte_*`), export at 0.05 EUR/kWh, with the optimiser. Seeds 1-3 for four boats, seed 1 for other fleet sizes. Scripts: `run_eem_series.ps1`, `run_eem_full.ps1`. Some cases (limits of 100 and 150 kW, 300-400 kWh batteries) are no longer shown in the dashboard | Dashboard, Ch. 7 |
-| `plain/` | Plant without smart charging (charging on arrival + rule-based battery), EEM 2026 medium voltage, export at 0.05 EUR/kWh. Seeds 1-2. Script: `run_plain_series.ps1`. Feeds `dashboard/plain.js` | Dashboard, Ch. 7 |
-| `peakhour/` | Average grid power in the peak hours (basis of the peak-hour power charge), EEM 2026 medium voltage, seed 1. `opt_*` with the optimiser (charging on arrival, smart charging, plant), `plain_*` without smart charging. 25 cases. Scripts: `run_peakhour_series.ps1`, `run_peakhour_series2.ps1`. Feeds `dashboard/peakhour.js` | Dashboard, Ch. 7 |
+| `export/` | Placeholder tariff plus a price of 0.05 EUR/kWh for the PV energy sent to the grid: seven solar/battery sizes (4 boats, seeds 1-3), 100 kWp + 200 kWh under grid limits of 80-150 kW (seeds 1-3) and with 2-10 boats (seed 1). Script: `scripts/run_export_series.ps1` | Ch. 7, export price |
+| `eem/` | EEM 2026 tariff (medium voltage `mt_*`, `mtcap120_*`, `f_*`; special low voltage `bte_*`), export at 0.05 EUR/kWh, with the optimiser. Seeds 1-3 for four boats, seed 1 for other fleet sizes. Scripts: `scripts/run_eem_series.ps1`, `scripts/run_eem_full.ps1`. Some cases (limits of 100 and 150 kW, 300-400 kWh batteries) are no longer shown in the dashboard | Dashboard, Ch. 7 |
+| `plain/` | Plant without smart charging (charging on arrival + rule-based battery), EEM 2026 medium voltage, export at 0.05 EUR/kWh. Seeds 1-2. Script: `scripts/run_plain_series.ps1`. Feeds `dashboard/plain.js` | Dashboard, Ch. 7 |
+| `peakhour/` | Average grid power in the peak hours (basis of the peak-hour power charge), EEM 2026 medium voltage, seed 1. `opt_*` with the optimiser (charging on arrival, smart charging, plant), `plain_*` without smart charging. 25 cases. Scripts: `scripts/run_peakhour_series.ps1`, `scripts/run_peakhour_series2.ps1`. Feeds `dashboard/peakhour.js` | Dashboard, Ch. 7 |
+| `eem_mv/`, `grid_mv/`, `sweep_mv/`, `plain_grid/`, `peakhour_mv/` | The series behind the dashboard (EEM 2026 medium-voltage tariff, export at 0.05 EUR/kWh, seed 1; four-boat cases with two or three seeds). Scripts: `scripts/run_eem_full.ps1`, `run_grid.ps1`, `run_sweep_cap.ps1`, `run_plain_grid.ps1`, `run_peakhour_series*.ps1`. They are the input of `build_dashboard_cases.py` and the `export_*_data.py` scripts | Dashboard, Ch. 7 |
 | top level | `garmin_seasons3` (reference plant, four seasons), `size_pv*_b*` (plant size at 4 boats), `rep_base_*`, `seed_*`, `peak_base_*` (repeated runs, seeds, peak-power charge) | Ch. 7 |
 
 `python build_dashboard_cases.py` rebuilds `dashboard/cases.js` from the
-files in `results/` (same layout as here). `python export_plain_data.py` and
+files in `results/`, which has the same layout as this folder: to rebuild
+without simulating again, copy this folder to `results/` first. `python export_plain_data.py` and
 `python export_peakhour_data.py` rebuild `dashboard/plain.js` and
 `dashboard/peakhour.js` from `results/plain` and `results/peakhour`.

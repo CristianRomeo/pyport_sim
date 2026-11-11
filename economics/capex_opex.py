@@ -77,24 +77,24 @@ class CapexBreakdown:
     """
     CAPEX line items for one asset class. All values in EUR.
 
-    TODO: the *_per_unit defaults below are order-of-magnitude references
-    from the inventory, not Funchal quotes:
-      - bess_eur_per_kwh: BES-09/10 (~550-700 USD/kWh installed, generic
-        US-market source)
-      - pv_eur_per_wp: PV-08 (~1.8-3.0 EUR/Wp, DOE/NREL benchmark)
-      - evse_eur_per_unit: EVS-05 (~USD 28,000/50kW unit, US commercial
-        DC fast charger, non-marine)
-    Replace with real supplier quotes once available (several are already
-    requested - see the Research Log).
+    The *_per_unit defaults below are assumptions, not Funchal quotes (Section
+    5.2.2 of the thesis lists their status):
+      - bess_eur_per_kwh: installed battery price, no published source; the
+        results are robust to it (the battery does not repay at much lower prices).
+      - pv_eur_per_wp: conservative value; NREL ATB 2024 gives 1.99 USD/Wdc for
+        commercial PV in 2022. The planner uses 1.0 EUR/Wp as default.
+      - evse_eur_per_unit: charger price, US commercial DC fast charger
+        (non-marine); chargers are treated as already installed by default.
+    Replace them with supplier quotes when available.
     """
 
     bess_kwh: float = 0.0
-    bess_eur_per_kwh: float = 650.0       # TODO: BES-09/10, confirm with quote
+    bess_eur_per_kwh: float = 650.0       # assumption; replace with a supplier quote
     # Battery POWER. The EUR/kWh price above covers a battery that can charge or
     # discharge in 4 hours (0.25 kW per kWh, bess_ref_kw_per_kwh). Power above
     # that reference costs bess_eur_per_extra_kw more (inverter / power
     # conversion). bess_kw = 0 means "not specified": no extra cost.
-    # TODO: 100 EUR/kW is an ESTIMATE for a commercial-size inverter (typical
+    # 100 EUR/kW is an ESTIMATE for a commercial-size inverter (typical
     # range 80-150 EUR/kW), not a quote. It is conservative: European C&I
     # packages are commonly sold at 0.4-0.5 kW per kWh within their EUR/kWh
     # price. Replace with the supplier quote.
@@ -102,9 +102,9 @@ class CapexBreakdown:
     bess_ref_kw_per_kwh: float = 0.25
     bess_eur_per_extra_kw: float = 100.0
     pv_wp: float = 0.0
-    pv_eur_per_wp: float = 2.4            # TODO: PV-08, confirm with quote
+    pv_eur_per_wp: float = 2.4            # assumption (conservative); replace with a quote
     evse_units: int = 0
-    evse_eur_per_unit: float = 26000.0    # TODO: EVS-05, confirm with quote
+    evse_eur_per_unit: float = 26000.0    # assumption; replace with a quote
 
     def bess_extra_power_eur(self) -> float:
         """Cost (EUR) of battery power above the reference included in the EUR/kWh price."""
@@ -128,19 +128,19 @@ class OpexBreakdown:
     """
     OPEX line items for one asset class, per year. All values in EUR/year.
 
-    TODO: the *_rate defaults are order-of-magnitude references, not
-    Funchal-specific:
-      - bess_rate_of_capex: BES-11 (~2-2.5%/year of CAPEX, generic benchmark)
-      - pv_eur_per_wp_year: PV-09 (~35-60 EUR/kWp/year, DOE/NREL)
-      - evse_eur_per_unit_year: EVS-06 (~USD 400/year/charger, US DOE)
+    The *_rate defaults are assumptions, not Funchal-specific values:
+      - bess_rate_of_capex: about 2-2.5 % of the battery CAPEX per year
+      - pv_eur_per_wp_year: NREL ATB 2024 gives about 21 USD/kWdc-year for
+        commercial PV (range 0-40); the default is higher, the planner's is lower
+      - evse_eur_per_unit_year: about 400 USD per charger per year (US DOE)
     """
 
     bess_capex: float = 0.0
-    bess_rate_of_capex: float = 0.0225   # TODO: BES-11
+    bess_rate_of_capex: float = 0.0225   # assumption
     pv_wp: float = 0.0
-    pv_eur_per_wp_year: float = 0.045    # TODO: PV-09 (45 EUR/kWp/year -> EUR/Wp/year)
+    pv_eur_per_wp_year: float = 0.045    # assumption (45 EUR/kWp/year, in EUR/Wp/year)
     evse_units: int = 0
-    evse_eur_per_unit_year: float = 370.0  # TODO: EVS-06
+    evse_eur_per_unit_year: float = 370.0  # assumption
 
     def total(self) -> float:
         """Sum of PV + BESS + EVSE OPEX for one year (EUR)."""

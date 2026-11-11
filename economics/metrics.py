@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 ECONOMIC_METRICS = (
     # --- Energy cost / revenue (per timestep, matches PyPort's own timestep) ---
     ("grid_energy_cost", "EUR", "float"),          # P_grid(t) * tariff_price(t) * dt/3600
-    ("export_revenue", "EUR", "float"),             # exported/curtailed PV valued at GRD-04
+    ("export_revenue", "EUR", "float"),             # exported/curtailed PV valued at the export price
     ("pv_self_consumption_value", "EUR", "float"),  # PV used on-site, valued at avoided grid cost
     # --- CAPEX (one-off, logged at t=0 of a scenario run) ---
     ("capex_pv", "EUR", "float"),
