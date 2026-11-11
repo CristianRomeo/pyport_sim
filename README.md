@@ -52,7 +52,7 @@ The scripts of step 3 read `results/`. To rebuild the dashboard from the summari
 
 ## Assumptions and limits
 
-- Prices are benchmarks, not supplier quotes: the PV price is 1.0 EUR/Wp in the planner and 2.4 EUR/Wp in the code, the battery 650 EUR/kWh. Every price can be changed in the planner.
+- Prices are benchmarks, not supplier quotes: the PV price is 1.0 EUR/Wp (commercial plants of 10-100 kWp in Spain, 2023, IEA PVPS), the battery 650 EUR/kWh. Every price can be changed in the planner.
 - The trips come from two real boat tracks recorded in Funchal and the vessel is the PyPort reference vessel.
 - The annual figures come from four representative weeks, one per season. Most cases are a single seeded run.
 - The tariff is the EEM 2026 medium-voltage tariff (ERSE Directive 10/2025). The revenue of a trip and the cost of a larger grid connection are not known and are left to the user.

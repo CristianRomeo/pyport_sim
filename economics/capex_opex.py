@@ -81,8 +81,9 @@ class CapexBreakdown:
     5.2.2 of the thesis lists their status):
       - bess_eur_per_kwh: installed battery price, no published source; the
         results are robust to it (the battery does not repay at much lower prices).
-      - pv_eur_per_wp: conservative value; NREL ATB 2024 gives 1.99 USD/Wdc for
-        commercial PV in 2022. The planner uses 1.0 EUR/Wp as default.
+      - pv_eur_per_wp: 1.0 EUR/Wp, the system price of commercial plants of
+        10-100 kWp in Spain in 2023 (IEA PVPS National Survey Report, Spain
+        2023; 0.8 EUR/Wp for 100-250 kWp). Madeira may be dearer.
       - evse_eur_per_unit: charger price, US commercial DC fast charger
         (non-marine); chargers are treated as already installed by default.
     Replace them with supplier quotes when available.
@@ -102,7 +103,7 @@ class CapexBreakdown:
     bess_ref_kw_per_kwh: float = 0.25
     bess_eur_per_extra_kw: float = 100.0
     pv_wp: float = 0.0
-    pv_eur_per_wp: float = 2.4            # assumption (conservative); replace with a quote
+    pv_eur_per_wp: float = 1.0            # Spain, commercial 10-100 kWp, 2023; replace with a quote
     evse_units: int = 0
     evse_eur_per_unit: float = 26000.0    # assumption; replace with a quote
 
@@ -130,15 +131,15 @@ class OpexBreakdown:
 
     The *_rate defaults are assumptions, not Funchal-specific values:
       - bess_rate_of_capex: about 2-2.5 % of the battery CAPEX per year
-      - pv_eur_per_wp_year: NREL ATB 2024 gives about 21 USD/kWdc-year for
-        commercial PV (range 0-40); the default is higher, the planner's is lower
+      - pv_eur_per_wp_year: 0.015 EUR/Wp/year (15 EUR/kWp/year), within the
+        8-30 EUR/kW a year quoted for commercial plants
       - evse_eur_per_unit_year: about 400 USD per charger per year (US DOE)
     """
 
     bess_capex: float = 0.0
     bess_rate_of_capex: float = 0.0225   # assumption
     pv_wp: float = 0.0
-    pv_eur_per_wp_year: float = 0.045    # assumption (45 EUR/kWp/year, in EUR/Wp/year)
+    pv_eur_per_wp_year: float = 0.015    # assumption (15 EUR/kWp/year, in EUR/Wp/year)
     evse_units: int = 0
     evse_eur_per_unit_year: float = 370.0  # assumption
 

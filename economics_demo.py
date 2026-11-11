@@ -85,7 +85,7 @@ def main():
     p = argparse.ArgumentParser(description="Step-by-step economics demo")
     p.add_argument("--csv", default="results_summary/garmin_seasons3.csv")
     p.add_argument("--boats", type=int, default=2)
-    p.add_argument("--pv-price", type=float, default=None, help="EUR per Wp (default 2.4)")
+    p.add_argument("--pv-price", type=float, default=None, help="EUR per Wp (default 1.0)")
     p.add_argument("--bess-price", type=float, default=None, help="EUR per kWh (default 650)")
     p.add_argument("--discount", type=float, default=0.07)
     p.add_argument("--horizon", type=int, default=20)
