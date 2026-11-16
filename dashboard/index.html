@@ -1113,7 +1113,7 @@
             { id: 's_b', key: function (c) { return c.b * 1000 + (c.bkw || 0) }, txt: function (v) { return v ? Math.floor(v / 1000) + ' kWh / ' + (v % 1000) + ' kW' : 'no battery' } },
             { id: 's_cap', key: function (c) { return c.cap }, txt: function (v, n) { return v + ' kW' + (v >= n * 50 ? ' (no limit)' : '') } }
         ];
-        function axisVals(ax, boats) { var o = {}; FULL.forEach(function (c) { if (c.boats === boats) o[ax.key(c)] = 1 }); return Object.keys(o).map(Number).sort(function (a, b) { return a - b }) }
+        function axisVals(ax, boats) { var o = {}; FULL.forEach(function (c) { if (c.boats === boats && AX.every(function (a) { return a === ax || a.key(c) === a.key(cur) })) o[ax.key(c)] = 1 }); return Object.keys(o).map(Number).sort(function (a, b) { return a - b }) }
         function syncSteps() {
             AX.forEach(function (ax) {
                 var vs = axisVals(ax, cur.boats), i = vs.indexOf(ax.key(cur));
@@ -1123,14 +1123,10 @@
             });
         }
         function stepTo(axIdx, idx) {
-            var ax = AX[axIdx], vs = axisVals(ax, cur.boats), v = vs[idx], pool = FULL.filter(function (c) { return c.boats === cur.boats && ax.key(c) === v });
-            var rank = AX.map(function (a) { return axisVals(a, cur.boats) });
-            var pos = function (c, k) { return rank[k].indexOf(AX[k].key(c)) };
-            var best = null, bd = 1e9;
-            pool.forEach(function (c) { var d = 0; for (var k = 0; k < 3; k++) if (k !== axIdx) d += Math.abs(pos(c, k) - pos(cur, k)); if (d < bd) { bd = d; best = c } });
-            var moved = bd > 0;
-            select(best.id);
-            $('s_note').textContent = moved ? 'That combination was not simulated: the other steps moved to the nearest simulated one.' : '';
+            var ax = AX[axIdx], vs = axisVals(ax, cur.boats), v = vs[idx];
+            if (v == null) return;
+            var best = FULL.filter(function (c) { return c.boats === cur.boats && ax.key(c) === v && AX.every(function (a) { return a === ax || a.key(c) === a.key(cur) }) })[0];
+            if (best) select(best.id);
         }
         function select(id) {
             cur = FULL.filter(function (c) { return c.id === id })[0] || FULL[0];
