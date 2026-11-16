@@ -142,9 +142,8 @@ BESS_EFFICIENCY = 0.96
 # Charger: PyPort ref = 22 kW AC, eta=0.95, 1:1 charger:boat ratio -
 # this is also the exact charger spec used in PyPort's own Funchal pier
 # validation scenario (Garces 2026, Sec. 3.3), so it is the most defensible
-# "real" value available, not a placeholder. The actual EVSE product being
-# quoted (Aqua superPower Aqua 75) is rated even higher
-# (75 kW) - 22 kW is already a conservative choice relative to that.
+# "real" value available, not a placeholder. Commercial marine chargers
+# rated at 75 kW and more exist, so 22 kW is a conservative choice.
 CHARGER_KW = 22.0
 CHARGER_EFFICIENCY = 0.95
 
