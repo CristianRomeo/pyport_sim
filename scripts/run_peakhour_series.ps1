@@ -3,7 +3,7 @@
 # Each in its own PowerShell (Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass):
 #     .\scripts\run_peakhour_series.ps1 1
 #     .\scripts\run_peakhour_series.ps1 2
-# Window 1: nine plants with the optimiser (gives charging on arrival, smart charging and the plant in one run)
+# Window 1: nine plants with the optimizer (gives charging on arrival, smart charging and the plant in one run)
 # Window 2: the same nine plants without smart charging (charging on arrival + rule-based battery)
 # Each window works in its own copy of the repo (pyport_sim_k1, ...) so the database files do not collide.
 # Results go to results\peakhour_mv of the real repo. A run whose CSV exists is skipped, so the script can be restarted.

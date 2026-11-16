@@ -1,5 +1,5 @@
 # Plant with charging on arrival and no smart charging (the "plain" plant), for every simulated case that does not have it yet.
-# 168 jobs, same tariff and options as run_grid.ps1; the optimiser is not used, so the runs are shorter than those of the grid.
+# 168 jobs, same tariff and options as run_grid.ps1; the optimizer is not used, so the runs are shorter than those of the grid.
 # From the repo root, once per window, each in its own PowerShell (three windows, the jobs are spread evenly):
 #     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #     .\scripts\run_plain_grid.ps1 1

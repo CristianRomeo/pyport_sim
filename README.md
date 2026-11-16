@@ -2,7 +2,7 @@
 
 Techno-economic extension of **PyPort Sim** for the electrification of recreational marinas, with a case study of the Funchal marina (Madeira).
 
-This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026, MIT licence), developed for the master's thesis *A Techno-Economic Analysis of the Electrification of Recreational Marinas: A Simulation-Based Approach with a Case Study in Funchal* (University of Bologna, Digital Transformation Management; research mobility at ITI/LARSyS, Funchal). It turns the engineering simulator into a planning tool: it adds an economic layer (CAPEX and OPEX, grid power charges, battery degradation, NPV and payback) and a dashboard in which a non-technical user chooses a simulated case, changes prices and assumptions and reads the financial result. The original PyPort README is kept in [`docs/PYPORT_README.md`](docs/PYPORT_README.md).
+This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026, MIT license), developed for the master's thesis *A Techno-Economic Analysis of the Electrification of Recreational Marinas: A Simulation-Based Approach with a Case Study in Funchal* (University of Bologna, Digital Transformation Management; research mobility at ITI/LARSyS, Funchal). It turns the engineering simulator into a planning tool: it adds an economic layer (CAPEX and OPEX, grid power charges, battery degradation, NPV and payback) and a dashboard in which a non-technical user chooses a simulated case, changes prices and assumptions and reads the financial result. The original PyPort README is kept in [`docs/PYPORT_README.md`](docs/PYPORT_README.md).
 
 ## What was added to PyPort
 
@@ -16,7 +16,7 @@ This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026
 
 ## Quick start
 
-Python 3.11 or later; the optimiser needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
+Python 3.11 or later; the optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
 
 ```bash
 python -m venv venv
@@ -25,7 +25,7 @@ pip install -r requirements.txt
 pytest tests/economics           # tests of the economic layer
 ```
 
-**Dashboard.** Open `dashboard/index.html` in a browser: it needs no server. *Findings* summarises the simulated cases, *Calculator* gives the detail of one case with editable prices, *Next steps* lists what is still open.
+**Dashboard.** Open `dashboard/index.html` in a browser: it needs no server. *Findings* summarizes the simulated cases, *Calculator* gives the detail of one case with editable prices, *Next steps* lists what is still open.
 
 **One simulation.** `python main.py` runs the PyPort example; `streamlit run streamlit_app.py` shows the time series of a run.
 

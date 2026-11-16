@@ -77,7 +77,7 @@ def print_sensitivity(args, rows):
     print(f"{'':<36}" + "".join(f"{str(n) + ' boats':>13}" for n in boats))
     for i, (label, _) in enumerate(table[boats[0]]):
         print(f"{label:<36}" + "".join(f"{table[n][i][1]:>13,.0f}" for n in boats))
-    print("\nBattery price decline: NREL ATB 2024 (indicative). Only battery life and")
+    print("\nBattery price decline: indicative scenarios. Only battery life and")
     print("replacement price change; no new simulation is needed.\n")
 
 
@@ -92,7 +92,7 @@ def main():
     p.add_argument("--bess-life", type=float, default=None, help="years before the battery is replaced (0 = never). Default: value derived in the CSV, else 10")
     p.add_argument("--bess-decline", type=float, default=0.0, help="yearly fall of the battery price (0.03 = 3%%)")
     p.add_argument("--bess-decline-case", choices=["low", "mid", "high"], default=None,
-                   help="named battery price decline (NREL ATB): low 1.5%%, mid 3.5%%, high 5.5%% a year")
+                   help="named battery price decline (indicative): low 1.5%%, mid 3.5%%, high 5.5%% a year")
     p.add_argument("--reference", choices=["scheduled", "plain"], default="scheduled",
                    help="baseline the savings are measured against: scheduled = grid only with smart "
                         "charging (credits PV+battery only with what they add); plain = no optimizer")

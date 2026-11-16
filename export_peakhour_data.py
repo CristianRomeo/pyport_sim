@@ -3,7 +3,7 @@
     python export_peakhour_data.py
 
 For every plant, boats and grid limit of results/eem_mv and results/sweep_mv it stores the average grid power in the
-peak hours (pkb, pks, pkd: charging on arrival, smart charging, plant with the optimiser) and the peak power of the
+peak hours (pkb, pks, pkd: charging on arrival, smart charging, plant with the optimizer) and the peak power of the
 15-minute averages, on which the contracted power is billed (kb, ks, kd). pkp and kp are the same two numbers for the
 plant without smart charging, read from the plain_*.csv files of results/peakhour_mv and results/sweep_mv
 (they equal the values of charging on arrival where there is no such run). Seeds are averaged.

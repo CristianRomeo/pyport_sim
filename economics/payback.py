@@ -75,7 +75,7 @@ def bess_replacement_schedule(
             bess_kwh * bess_eur_per_kwh.
         life_years: Years before the battery must be replaced (e.g. the
             time to reach 80% health, from degradation.py). 0 or less
-            means "no replacement modelled" and returns {}.
+            means "no replacement modeled" and returns {}.
         horizon_years: Length of the analysis (years).
         annual_price_decline: Yearly fall of the battery price (0.03 = 3%).
             The cost in year y is bess_capex_eur * (1 - decline) ** y.
@@ -97,9 +97,8 @@ def bess_replacement_schedule(
 
 
 # Yearly fall of the battery price, used for the replacement cost only.
-# Source: NREL ATB 2024, commercial battery storage (600 kW, 4 h): CAPEX
-# reduction 2022-2035 of 17.5 % (conservative), 36.5 % (moderate) and 52 %
-# (advanced), annualised over 13 years. Indicative: replace with vendor data.
+# Indicative scenarios (low 1.5 %, mid 3.5 %, high 5.5 % a year), not taken from
+# a vendor or a price series: replace with vendor data. The default is no decline.
 BESS_PRICE_DECLINE_CASES: Dict[str, float] = {"low": 0.015, "mid": 0.035, "high": 0.055}
 
 

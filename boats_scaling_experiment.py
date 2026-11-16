@@ -193,10 +193,10 @@ GRID_LIMIT_KW = None
 # the scheduled baseline and the DER scenario of one week get the SAME trips
 # (a paired comparison: the savings no longer carry the noise of different route
 # draws), and runs with the same seed but a different plant or grid limit are
-# paired too. None (default) keeps the old behaviour: a fresh random draw for
+# paired too. None (default) keeps the old behavior: a fresh random draw for
 # every scenario.
 SEED = None
-PLAIN_DER = False   # plant scenario with charging on arrival and rule-based battery (no optimiser)
+PLAIN_DER = False   # plant scenario with charging on arrival and rule-based battery (no optimizer)
 
 
 def contracted_power_for(num_boats: int) -> float:
@@ -223,7 +223,7 @@ SEASONS = {
 ALL_SEASONS = ["winter", "spring", "summer", "autumn"]
 
 # Twelve monthly weeks (a Monday per month, no public holiday in the week).
-# Each stands for 1/12 of the year; --seasons normalises the weights anyway.
+# Each stands for 1/12 of the year; --seasons normalizes the weights anyway.
 MONTH_STARTS = ["2025-01-13", "2025-02-10", "2025-03-10", "2025-04-07",
                 "2025-05-12", "2025-06-02", "2025-07-14", "2025-08-04",
                 "2025-09-08", "2025-10-13", "2025-11-10", "2025-12-15"]
@@ -398,7 +398,7 @@ def main():
     parser.add_argument("--bess-price-decline", type=float, default=0.0,
                          help="Yearly fall of the battery price used for the replacement (default 0)")
     parser.add_argument("--bess-decline-case", choices=["low", "mid", "high"], default=None,
-                         help="Named battery price decline (NREL ATB): low 1.5%%, mid 3.5%%, high 5.5%% a year")
+                         help="Named battery price decline (indicative): low 1.5%%, mid 3.5%%, high 5.5%% a year")
     parser.add_argument("--seasons", nargs="+", choices=sorted(SEASONS), default=ALL_SEASONS,
                          help="Representative weeks to simulate (default: winter spring summer autumn; "
                               "sep = the old single September week). Use one name for a quick test.")
@@ -438,7 +438,7 @@ def main():
                               "The number of boats is the sum; --boat-counts is overridden.")
     parser.add_argument("--plain-der", action="store_true",
                          help="EXPERIMENT: the plant runs with charging on arrival and a rule-based battery "
-                              "(PV surplus, peak shaving, off-peak charging) instead of the optimiser. "
+                              "(PV surplus, peak shaving, off-peak charging) instead of the optimizer. "
                               "Use with --skip-scheduled: the saving is then against charging on arrival.")
     parser.add_argument("--out-csv", default="boats_scaling_results.csv")
     args = parser.parse_args()
@@ -469,7 +469,7 @@ def main():
     SEED = args.seed
     PLAIN_DER = args.plain_der
     if PLAIN_DER:
-        print("Plant scenario: charging on arrival + rule-based battery (no optimiser)")
+        print("Plant scenario: charging on arrival + rule-based battery (no optimizer)")
     PV_KW = args.pv_kwp
     BESS_KWH = args.bess_kwh
     BESS_KW = args.bess_kw if args.bess_kw is not None else min(50.0, BESS_KWH / 4.0)

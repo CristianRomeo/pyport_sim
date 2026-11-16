@@ -3,7 +3,7 @@
 # EEM 2026 tariff in medium voltage, PV energy sent to the grid paid 0.05 EUR/kWh, seed 1, Garmin routes.
 # From the repo root, each in its own PowerShell
 # (Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass):
-#     .\scripts\run_peakhour_series2.ps1 1     # with the optimiser: charging on arrival, smart charging, plant
+#     .\scripts\run_peakhour_series2.ps1 1     # with the optimizer: charging on arrival, smart charging, plant
 #     .\scripts\run_peakhour_series2.ps1 2     # without smart charging: plant + charging on arrival
 # Each window works in its own copy of the repo (pyport_sim_k1, ...). Results go to results\peakhour_mv.
 # A run whose CSV exists is skipped, so the script can be restarted.

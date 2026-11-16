@@ -12,6 +12,9 @@ from optimization import BaseOptimizer
 from simulation.trip_manager import TripManager
 from weather import OpenMeteoClient
 
+# Charging trace printed every 15 minutes of the day (debugging only).
+_TRACE = False
+
 
 class SimulationEngine:
     """Main simulation engine for the electric port."""
@@ -632,7 +635,7 @@ class SimulationEngine:
             )
 
         # DEBUG: Print scheduled powers
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             print(
                 f"\n  [DEBUG {ts_str}] Scheduled charger powers: {scheduled_charger_power}"
             )
@@ -650,7 +653,7 @@ class SimulationEngine:
                 boat_to_charger[charger.connected_boat] = charger.name
 
         # DEBUG: Print current assignments
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             currently_charging = [
                 (
                     boat_name,
@@ -670,7 +673,7 @@ class SimulationEngine:
             if boat.soc >= 0.99:
                 charger = next(c for c in self.port.chargers if c.name == charger_name)
 
-                if now.hour < 18 and now.minute % 15 == 0:
+                if _TRACE and now.hour < 18 and now.minute % 15 == 0:
                     print(f"  [DEBUG] Disconnecting {boat_name} - fully charged")
 
                 charger.state = ChargerState.IDLE
@@ -736,7 +739,8 @@ class SimulationEngine:
                 boat.state = BoatState.CHARGING
 
                 if (
-                    now.hour < 18
+                    _TRACE
+                    and now.hour < 18
                     and now.minute % 15 == 0
                     and abs(old_power - new_power) > 0.1
                 ):
@@ -766,20 +770,20 @@ class SimulationEngine:
                         (boat.name, assigned_charger.name, new_power)
                     )
                 else:
-                    if now.hour < 18 and now.minute % 15 == 0:
+                    if _TRACE and now.hour < 18 and now.minute % 15 == 0:
                         print(
                             f"  [DEBUG] WARNING: No pre-assignment for {boat.name} (needs {scheduled_power:.1f} kW)"
                         )
 
         # DEBUG: Print releases and new assignments
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             if releases_made:
                 print(f"  [DEBUG] Released: {releases_made}")
             if assignments_made:
                 print(f"  [DEBUG] New assignments: {assignments_made}")
 
         # DEBUG: Print final state
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             total_power = sum(
                 c.power for c in self.port.chargers if c.state == ChargerState.CHARGING
             )
@@ -1233,7 +1237,7 @@ class SimulationEngine:
         return cache[1]
 
     def _update_bess_rule_based(self):
-        """Battery rules without optimiser or forecast."""
+        """Battery rules without optimizer or forecast."""
         step = self.settings.timestep
         pv = sum(p.current_production for p in self.port.pv_systems)
         load = sum(
