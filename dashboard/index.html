@@ -808,8 +808,7 @@
                 <section>
                     <h2>All simulated cases</h2>
                     <p class="note">NPV at the inputs on the left: the plant against smart charging, and with smart
-                        charging added (against charging on arrival). Click a row to load that case.<span
-                            id="cn"></span></p>
+                        charging added (against charging on arrival). Click a row to load that case.</p>
                     <div class="scroll">
                         <table id="cases"></table>
                     </div>
@@ -845,9 +844,8 @@
     <script src="peakhour.js"></script>
     <script>
         var CASES = (window.CASES_DATA || []).slice();
-        CASES.forEach(function (c) { c.tar = c.tar || 'placeholder'; c.name = c.name.replace('EEM MT', 'medium voltage') });
-        var TAR = { placeholder: 'placeholder tariff', eem_mt: 'EEM 2026 medium voltage' };
-        CASES = CASES.filter(function (c) { return c.tar === 'eem_mt' });
+        CASES.forEach(function (c) { c.name = c.name.replace('EEM MT', 'medium voltage') });
+        var TAR = { eem_mt: 'EEM 2026 medium voltage' };
         var PH = CASES.filter(function (c) { return c.tar === 'eem_mt' });
         // Average grid power in the peak hours (kW), measured for four boats with no grid limit, medium voltage.
         var PEAKH = (window.PEAKHOUR_DATA || []).slice();
@@ -858,7 +856,7 @@
         }
         CASES.forEach(function (c) { c.ph = peakOf(c) });
         // Reduced case list: the medium-voltage cases with a measured peak-hour power, every case at its own connection size.
-        CASES = CASES.filter(function (c) { return c.tar !== 'eem_mt' || c.ph });
+        CASES = CASES.filter(function (c) { return c.ph });
         PH = CASES.filter(function (c) { return c.tar === 'eem_mt' });
         // All simulated points are kept for the connection sweep; the selector, tables and counts use the reference sizes (no limit, 120 and 80 kW for four boats).
         var FULL = PH.slice();
@@ -950,7 +948,7 @@
         function tr(cells, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + cells + '</tr>' }
         function describe(c) {
             var plant = c.pv > 0 && c.b > 0 ? 'a solar plant of ' + c.pv + ' kWp together with a battery of ' + c.b + ' kWh (' + c.bkw + ' kW of power)' : c.pv > 0 ? 'a solar plant of ' + c.pv + ' kWp, with no battery' : c.b > 0 ? 'a battery of ' + c.b + ' kWh (' + c.bkw + ' kW of power), with no solar' : 'no plant';
-            var tar = c.tar === 'eem_mt' ? 'the EEM 2026 medium voltage tariff' : 'a placeholder tariff';
+            var tar = 'the EEM 2026 medium voltage tariff';
             var grid = c.cap <= 150 ? 'The marina’s grid connection is limited to ' + c.cap + ' kW, so when many boats charge at once some trips cannot be made.' : 'The grid connection is large enough that it never limits the charging.';
             return '<b>What is simulated.</b> A marina with ' + c.boats + ' electric boats that follow a planned daily schedule of trips, charged with electricity bought at ' + tar + ' (energy prices only). The plant being evaluated is ' + plant + '. ' + grid + ' The simulator runs four representative weeks (winter, spring, summer, autumn)' + (c.runs > 1 ? ' and the figures are the average of ' + c.runs + ' runs.' : ' in a single run.') + ' Four ways of running the marina are compared: charging each boat on arrival (the reference); the plant with charging on arrival and a simple battery rule, no optimizer (medium voltage cases only); smart charging (an optimizer charges at the cheapest hours, with nothing to buy); and smart charging plus the plant. The result below says whether the plant, bought on top of smart charging, repays its cost over the horizon.';
         }
@@ -959,7 +957,7 @@
             $('ttl').textContent = cur.name;
             $('desc').innerHTML = describe(cur);
             $('thr').textContent = cur.thr || 80;
-            $('epn').textContent = cur.exp != null ? '€ per kWh for solar energy sent to the grid' : (cur.pv > 0 ? 'this case was simulated before export was priced: has no effect' : 'no solar in this case: has no effect');
+            $('epn').textContent = cur.exp != null ? '€ per kWh for solar energy sent to the grid' : 'no solar in this case: has no effect';
             $('kpn').textContent = cur.b <= 0 ? 'this case has no battery: no effect' : extraKw(cur) > 0 ? '€ per kW above 1 kW per 4 kWh; this battery has ' + extraKw(cur).toFixed(0) + ' kW above' : '€ per kW above 1 kW per 4 kWh; this battery is at the reference power: no effect';
             $('ppn').textContent = cur.ph ? '€ per kW per year of average power in the peak hours (EEM 2026, medium voltage: 89)' : 'no peak-hour figure for this case';
             $('xfn').textContent = cur.xsav == null ? 'no data for this case: has no effect' : '× the normal tariff';
@@ -1093,7 +1091,6 @@
                 h += '<tr class="pick' + (x.c === cur ? ' sel' : '') + '" data-id="' + x.c.id + '" tabindex="0"><td>' + x.c.name + '</td><td class="r">' + fmt(savOf(x.c, p)) + '</td><td class="r">' + fmt(smartOf(x.c, p)) + '</td><td class="r">' + (x.c.b > 0 ? x.c.life.toFixed(1) + ' y' : '—') + '</td><td class="r">' + fmt(x.r.npv) + '</td><td class="r">' + fmt(pkgNpv(x.c, p, x.r)) + '</td><td class="r"><span class="track"><span class="fill" style="left:' + a + '%;width:' + Math.max(b2 - a, 0.8) + '%"></span><span class="zl" style="left:' + zp + '%"></span></span></td></tr>';
             });
             $('cases').innerHTML = h;
-            $('cn').textContent = CASES.some(function (c) { return c.pv > 0 && c.exp == null }) ? ' Cases marked † have solar but were simulated before export was priced, so the export price does not change them.' : '';
             Array.prototype.forEach.call($('cases').querySelectorAll('tr.pick'), function (el) {
                 el.onclick = function () { select(el.getAttribute('data-id')) };
                 el.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(el.getAttribute('data-id')) } };
@@ -1504,7 +1501,7 @@
             if (name === 'calc') render();
         }
         (function init() {
-            if (!CASES.length) { document.querySelector('main').innerHTML = '<h2>No data</h2><p>cases.js is missing. Run: python export_dashboard_data.py garmin_seasons3.csv size_*.csv</p>'; return }
+            if (!CASES.length) { document.querySelector('main').innerHTML = '<h2>No data</h2><p>cases.js is missing. Run: python build_dashboard_cases.py</p>'; return }
             var groups = {}, sel = $('case');
             FULL.forEach(function (c) {
                 var gk = c.g + ' · ' + TAR[c.tar];
