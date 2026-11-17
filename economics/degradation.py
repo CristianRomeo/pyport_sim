@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 
 # Approximate Li-ion cycle-life curve: (equivalent_full_cycles, remaining_SOH)

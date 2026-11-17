@@ -7,7 +7,7 @@ CAPEX/OPEX and Levelized Cost of Storage (LCOS)
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 
 def annual_cost(

@@ -80,6 +80,6 @@ build_dashboard_cases.py, export_*.py
                          build the dashboard data files from the results
 ```
 
-## Licence
+## License
 
 MIT, as the original PyPort Sim (see `LICENSE`).
