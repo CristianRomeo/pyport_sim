@@ -18,6 +18,8 @@ This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026
 
 Python 3.11 or later; the optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
 
+Requirements to reproduce the results: Python 3.11 or later (3.12 tested), internet access (simulations with PV download the weather of the simulated days from Open-Meteo; without it the run stops with an error), and Windows PowerShell for the scripts in `scripts/`. The tests and the dashboard need neither.
+
 ```bash
 python -m venv venv
 venv\Scripts\activate            # Linux/macOS: source venv/bin/activate

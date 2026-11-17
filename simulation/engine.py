@@ -1,5 +1,6 @@
 """Core simulation engine for the electric port simulator."""
 
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Union
@@ -1045,11 +1046,23 @@ class SimulationEngine:
         fetch_days = min(days if days else self.days, 7)  # Cap at 7 days
 
         print("  Fetching weather forecast from Open-Meteo...")
-        forecast_data = self.weather_client.fetch_forecast(fetch_start, fetch_days)
+        forecast_data = None
+        for attempt in range(3):
+            forecast_data = self.weather_client.fetch_forecast(fetch_start, fetch_days)
+            if forecast_data and "timestamps" in forecast_data:
+                break
+            time.sleep(2 * (attempt + 1))
 
         if not forecast_data or "timestamps" not in forecast_data:
-            print("  ⚠️  Failed to fetch weather forecast")
-            return
+            msg = (
+                "Could not download the weather data from Open-Meteo (internet access "
+                "is required for simulations with PV). Without it the PV production "
+                "would be zero and the results wrong."
+            )
+            if os.environ.get("PYPORT_ALLOW_NO_WEATHER") == "1":
+                print(f"  WARNING: {msg} Continuing because PYPORT_ALLOW_NO_WEATHER=1.")
+                return
+            raise RuntimeError(msg)
 
         timestamps = forecast_data["timestamps"]
         print(f"  ✓ Received {len(timestamps)} hours of forecast data")
