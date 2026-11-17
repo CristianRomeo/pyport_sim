@@ -1,282 +1,85 @@
-# Electric Port Simulator
+# Marina Electrification Planner
 
-A comprehensive simulation system for managing electric recreational ports with boats, charging infrastructure, solar PV systems, and battery energy storage systems (BESS). The simulator optimizes energy usage, manages boat charging schedules, and handles trip assignments while respecting grid power constraints.
+Techno-economic extension of **PyPort Sim** for the electrification of recreational marinas, with a case study of the Funchal marina (Madeira).
 
-## Features
+This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026, MIT license), developed for the master's thesis *A Techno-Economic Analysis of the Electrification of Recreational Marinas: A Simulation-Based Approach with a Case Study in Funchal* (University of Bologna, Digital Transformation Management; research mobility at ITI/LARSyS, Funchal). It turns the engineering simulator into a planning tool: it adds an economic layer (CAPEX and OPEX, grid power charges, battery degradation, NPV and payback) and a dashboard in which a non-technical user chooses a simulated case, changes prices and assumptions and reads the financial result. The original PyPort README is kept in [`docs/PYPORT_README.md`](docs/PYPORT_README.md).
 
-- **Port Management**: Simulate electric ports with configurable power contracts and location
-- **Boat Fleet**: Model multiple electric boats with different specifications (motor power, battery capacity, weight, etc.)
-- **Charging Infrastructure**: Multiple charging stations with configurable power and efficiency
-- **Solar PV System**: Realistic PV production modeling using weather data from Open-Meteo API
-- **Battery Storage (BESS)**: Energy storage system with configurable capacity and control strategies
-- **Trip Management**: Load and assign boat trips from CSV route files
-- **Energy Forecasting**: Predict energy consumption and production for optimal scheduling
-- **Optimization**: SCIP-based optimization engine to minimize grid usage and trip delays
-- **Weather Integration**: Real-time weather data fetching for accurate PV production forecasts
-- **Database Storage**: SQLite database for storing simulation results and forecasts
-- **Visualization**: Streamlit web app for viewing simulation results and analyzing data
+## What was added to PyPort
 
-## Installation
+| Part | Where | What it does |
+|---|---|---|
+| Economic layer | `economics/` | CAPEX/OPEX, levelized cost of storage, battery degradation and replacements, EEM 2026 tariff handling, NPV, simple and discounted payback. Tested in `tests/economics/`. |
+| Simulator changes | `simulation/`, `forecasting/` | Forecaster charging-window correction, number of daily trip slots from the configuration, EEM tariff files, price of exported energy, plant without smart charging (charging on arrival and a rule-based battery), measurement of the power in the peak hours. The validated asset models are unchanged. |
+| Experiments | `boats_scaling_experiment.py`, `garmin_scaling_experiment.py`, `scripts/` | Run a case for four representative weeks and write one CSV row. The scripts run whole series of cases. |
+| Dashboard | `dashboard/` | Static page (`index.html`) with its data files (`cases.js`, `plain.js`, `peakhour.js`): 180 simulated cases. |
+| Results | `results_summary/` | Summary CSVs of every series used in the thesis. |
 
-### Prerequisites
+## Quick start
 
-- Python 3.11 or higher
-- SCIP Optimization Suite (required for optimization features)
+Python 3.11 or later; the optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
 
-### Setup
+Requirements to reproduce the results: Python 3.11 or later (3.12 tested), internet access (simulations with PV download the weather of the simulated days from Open-Meteo; without it the run stops with an error), and Windows PowerShell for the scripts in `scripts/`. The tests and the dashboard need neither.
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd pyport_sim
-```
-
-2. Create a virtual environment (recommended):
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
+venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
+pytest tests/economics           # tests of the economic layer
 ```
 
-4. Install SCIP (for optimization features):
-   - **Linux**: Download from [SCIP website](https://scipopt.org/index.php/download) or use package manager
-   - **macOS**: `brew install scip`
-   - **Windows**: Download installer from SCIP website
+**Dashboard.** Open `dashboard/index.html` in a browser: it needs no server. *Findings* summarizes the simulated cases, *Calculator* gives the detail of one case with editable prices, *Next steps* lists what is still open.
 
-## Quick Start
+**One simulation.** `python main.py` runs the PyPort example; `streamlit run streamlit_app.py` shows the time series of a run.
 
-1. Run a simulation:
+**One case of the thesis.**
+
 ```bash
-python main.py
+python garmin_scaling_experiment.py --help
+python economics_demo.py          # step-by-step walk through the economic calculation
 ```
 
-2. View results in the Streamlit dashboard:
+## Reproducing the results
+
+1. Build the tariff files: `python make_eem_tariffs.py` (writes `assets/tariff/eem_*.json`).
+2. Run a series of simulations from the repo root, on Windows PowerShell, for example `.\scripts\run_grid.ps1 1` (see [`scripts/README.md`](scripts/README.md) for the scripts, their order and the folders they write). A full series takes many hours and about 1.2 GB of logs, which are not versioned.
+3. Rebuild the dashboard data:
+
 ```bash
-streamlit run streamlit_app.py
+python build_dashboard_cases.py   # dashboard/cases.js
+python export_plain_data.py       # dashboard/plain.js
+python export_peakhour_data.py    # dashboard/peakhour.js
 ```
 
-## Project Structure
+The scripts of step 3 read `results/`. To rebuild the dashboard from the summaries kept in this repository without simulating again, copy them first: `Copy-Item results_summary results -Recurse` (Windows) or `cp -r results_summary results`.
+
+## Assumptions and limits
+
+- Prices are benchmarks, not supplier quotes: the PV price is 1.0 EUR/Wp (commercial plants of 10-100 kWp in Spain, 2023, IEA PVPS), the battery 650 EUR/kWh. Every price can be changed in the planner.
+- The trips come from two real boat tracks recorded in Funchal and the vessel is the PyPort reference vessel.
+- The annual figures come from four representative weeks, one per season. Most cases are a single seeded run.
+- The tariff is the EEM 2026 medium-voltage tariff (ERSE Directive 10/2025). The revenue of a trip and the cost of a larger grid connection are not known and are left to the user.
+- The repository does not implement a Digital Twin: there is no live data and no closed-loop control.
+
+The thesis explains the model and discusses the results; the economic layer is described in [`economics/README.md`](economics/README.md).
+
+## Layout
 
 ```
-pyport_sim/
-├── main.py                 # Main entry point for simulations
-├── streamlit_app.py        # Web dashboard for viewing results
-├── requirements.txt        # Python dependencies
-├── config/
-│   └── settings.py        # Simulation settings and configuration
-├── models/
-│   ├── port.py            # Port model
-│   ├── boat.py            # Boat model
-│   ├── charger.py         # Charger model
-│   ├── pv.py              # PV system model
-│   ├── bess.py            # Battery storage model
-│   └── trip.py            # Trip/route model
-├── simulation/
-│   ├── engine.py          # Core simulation engine
-│   └── trip_manager.py    # Trip assignment and management
-├── optimization/
-│   └── base_optimizer.py  # SCIP-based energy optimization (charger/BESS schedules)
-├── forecasting/
-│   └── port_forecaster.py # Energy consumption/production forecasting
-├── database/
-│   └── db_manager.py      # SQLite database operations
-├── weather/
-│   └── openmeteo.py       # Weather API client
-└── assets/
-    ├── trips/             # CSV route files for boat trips
-    └── tariff/            # Electricity tariff configuration
+economics/               economic layer (CAPEX/OPEX, degradation, tariffs, payback) and its CLI
+dashboard/               planner: index.html and data files
+scripts/                 PowerShell scripts that run series of simulations
+results_summary/         summary CSVs of the series (logs and databases are not kept)
+tests/                   tests (economics/ is new; the rest comes from PyPort)
+models/ simulation/ optimization/ forecasting/ database/ weather/ config/ assets/
+                         PyPort Sim packages and input data
+boats_scaling_experiment.py, garmin_scaling_experiment.py, summarize_runs.py
+                         experiment drivers
+make_eem_tariffs.py, make_tariffs.py
+                         tariff files (EEM 2026; sensitivity tariffs)
+build_dashboard_cases.py, export_*.py
+                         build the dashboard data files from the results
 ```
 
-## Configuration
+## License
 
-### Port Setup
-
-Configure your port in `main.py`:
-
-```python
-port = Port(
-    name="Marina del Sol",
-    contracted_power=40,  # kW
-    lat=32.64542,
-    lon=-16.90841,
-)
-```
-
-### Boats
-
-Add boats with their specifications:
-
-```python
-boat = Boat(
-    name="SeaBreeze",
-    motor_power=120,        # kW
-    weight=2500,            # kg
-    length=8.5,             # m
-    battery_capacity=150,   # kWh
-    range_speed=15.0,       # knots
-    soc=0.30,              # Initial state of charge (0-1)
-)
-```
-
-### Chargers
-
-Configure charging stations:
-
-```python
-charger = Charger(
-    name="FastCharger_A",
-    max_power=22,          # kW
-    efficiency=0.95,       # 95% efficiency
-)
-```
-
-### PV System
-
-Set up solar panels:
-
-```python
-pv_system = PV(
-    name="Solar_Array_1",
-    capacity=30.0,         # kW DC at STC
-    tilt=30.0,             # degrees
-    azimuth=180.0,         # degrees (180 = South-facing)
-    latitude=port.lat,
-    longitude=port.lon,
-)
-```
-
-### BESS (Battery Storage)
-
-Configure battery storage:
-
-```python
-bess = BESS(
-    name="Battery_Storage_1",
-    capacity=100.0,         # kWh
-    max_charge_power=25.0,  # kW
-    max_discharge_power=25.0,  # kW
-    efficiency=0.90,       # Round-trip efficiency
-    soc_min=0.10,          # Minimum SOC (10%)
-    soc_max=0.90,          # Maximum SOC (90%)
-    initial_soc=0.50,      # Initial SOC (50%)
-    control_strategy=BESSControlStrategy.DEFAULT,
-)
-```
-
-### Simulation Settings
-
-Configure simulation parameters:
-
-```python
-settings = Settings(
-    timestep=900,                     # 15 minutes in seconds
-    mode=SimulationMode.BATCH,        # BATCH or REAL_TIME
-    db_path="port_simulation.db",     # Database file path
-    use_optimizer=True,               # Enable SCIP optimization
-    power_limit_mode=False,           # Baseline power limiting without optimizer
-    trip_schedule=((9, 0), (14, 1)),  # Daily departures: (hour_utc, slot_index)
-)
-```
-
-## Usage
-
-### Running a Simulation
-
-1. Edit `main.py` to configure your port, boats, chargers, PV, and BESS
-2. Run the simulation:
-```bash
-python main.py
-```
-
-The simulation will:
-- Load trip routes from `assets/trips/`
-- Fetch weather forecasts from Open-Meteo API
-- Generate energy forecasts
-- Optimize charging schedules (if optimizer enabled)
-- Simulate boat trips and charging
-- Save all data to SQLite database
-
-### Viewing Results
-
-Launch the Streamlit dashboard:
-```bash
-streamlit run streamlit_app.py
-```
-
-The dashboard allows you to:
-- Select database files
-- Filter by sources (boats, chargers, PV, BESS, port)
-- Filter by metrics (power, SOC, status, etc.)
-- View time-series plots
-- Download filtered data as CSV
-
-## Key Components
-
-### Simulation Engine
-
-The `SimulationEngine` manages the entire simulation:
-- Time-stepped simulation (default: 15-minute intervals)
-- Boat trip assignment and execution
-- Charging management
-- PV production calculation
-- BESS charge/discharge control
-- Grid power monitoring
-
-### Optimization
-
-The `BaseOptimizer` (in `optimization.base_optimizer`) uses SCIP to optimize:
-- Charger power schedules
-- BESS charge/discharge schedules
-- Minimize grid usage
-- Minimize trip delays
-- Consider electricity tariffs
-
-### Forecasting
-
-The `PortForecaster` predicts:
-- Energy consumption (boats on trips + charging)
-- PV production (based on weather forecasts)
-- BESS availability
-- Net energy balance
-
-### Trip Management
-
-Trips are loaded from CSV files in `assets/trips/` with format:
-- `timestamp`: DateTime of waypoint
-- `type`: Point type (Static, Dock, Terrestrial, Interpolated)
-- `speed`: Speed in knots
-- `heading`: Heading in degrees
-- `latitude`: Latitude coordinate
-- `longitude`: Longitude coordinate
-
-## Database Schema
-
-The simulator uses SQLite with three main tables:
-
-- **measurements**: Actual simulated data (power, SOC, status, etc.)
-- **forecast**: Predicted energy consumption and production
-- **scheduling**: Optimized schedules for chargers and BESS
-
-## Dependencies
-
-Key dependencies:
-- `pandas`: Data manipulation
-- `numpy`: Numerical computations
-- `pyscipopt`: SCIP optimization solver
-- `streamlit`: Web dashboard
-- `plotly`: Interactive visualizations
-- `requests`: HTTP requests for weather API
-
-See `requirements.txt` for complete list.
-
-## Notes
-
-- Weather data is fetched from Open-Meteo API (free tier, 7-day forecast limit)
-- Optimization requires SCIP solver installation
-- Simulation supports up to 7 days per run
-- Trip routes must be in CSV format with specific columns
-- Database file is created automatically on first run
+MIT, as the original PyPort Sim (see `LICENSE`).

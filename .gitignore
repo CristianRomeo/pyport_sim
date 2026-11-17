@@ -182,3 +182,16 @@ output/
 
 comparison_results/
 .cursor/
+size_*.csv
+prova*.csv
+garmin_seasons3*.csv
+
+results/
+old_results/
+
+all_python_code.pdf
+
+# Thesis workspace
+_tmp*/
+*.tgz
+.pytest_cache/

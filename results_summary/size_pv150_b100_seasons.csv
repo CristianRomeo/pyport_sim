@@ -1,0 +1,5 @@
+num_boats,season,start_date,weeks,assigned_trips,baseline_weekly_eur,baseline_service_level,der_weekly_eur,der_service_level,scheduled_weekly_eur,scheduled_service_level,weekly_savings_eur
+4,winter,2025-01-13,13.04,56,864.0,1.0,332.19,1.0,491.14,1.0,158.94
+4,spring,2025-04-07,13.04,56,864.0,1.0,313.49,1.0,491.14,1.0,177.65
+4,summer,2025-07-14,13.04,84,1489.25,1.0,508.62,1.0,927.2,1.0,418.59
+4,autumn,2025-10-13,13.04,84,1490.75,1.0,616.05,1.0,920.05,1.0,304.0

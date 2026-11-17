@@ -1,0 +1,5 @@
+num_boats,season,start_date,weeks,assigned_trips,baseline_weekly_eur,baseline_service_level,der_weekly_eur,der_service_level,baseline_excess_kwh,scheduled_excess_kwh,der_excess_kwh,baseline_peak_kw,scheduled_peak_kw,der_peak_kw,scheduled_weekly_eur,scheduled_service_level,weekly_savings_eur
+4,winter,2025-01-13,13.04,56,1031.19,1.0,576.28,1.0,0.0,0.0,0.0,80.0,80.0,80.0,610.68,1.0,34.4
+4,spring,2025-04-07,13.04,56,1031.19,1.0,569.11,1.0,0.0,0.0,0.0,80.0,80.0,80.0,610.68,1.0,41.57
+4,summer,2025-07-14,13.04,84,1151.63,0.905,1013.8,0.964,0.0,0.0,0.0,80.0,80.0,80.0,874.09,0.905,-139.7
+4,autumn,2025-10-13,13.04,84,1144.21,0.893,981.4,0.94,0.0,0.0,0.0,80.0,80.0,80.0,872.6,0.893,-108.8

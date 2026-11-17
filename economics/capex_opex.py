@@ -1,0 +1,152 @@
+"""
+CAPEX/OPEX and Levelized Cost of Storage (LCOS)
+
+    LCOS = (CAPEX + sum_t A_t/(1+i)^t) / sum_t (W_out,t / (1+i)^t)
+    A_t  = OPEX_t + CAPEX_re,t + c_el * W_in - R_t
+
+"""
+
+from dataclasses import dataclass
+from typing import List
+
+
+def annual_cost(
+    opex_t: float,
+    capex_reinvestment_t: float,
+    c_el: float,
+    w_in_t: float,
+    recovery_value_t: float = 0.0,
+) -> float:
+    """
+    Annual cost A_t for year t (Chapter 2, Eq. annualcost).
+
+    Args:
+        opex_t: Operational expenditure in year t (EUR).
+        capex_reinvestment_t: Reinvestment in storage components in year t
+            (EUR).
+        c_el: Cost of electricity supply (EUR/kWh) in year t.
+        w_in_t: Energy charged into storage in year t (kWh).
+        recovery_value_t: Residual/recovery value realized in year t (EUR),
+           
+    Returns:
+        A_t (EUR).
+    """
+    return opex_t + capex_reinvestment_t + c_el * w_in_t - recovery_value_t
+
+
+def lcos(
+    capex: float,
+    annual_costs: List[float],
+    energy_outputs: List[float],
+    discount_rate: float,
+) -> float:
+    """
+    Levelized Cost of Storage (Chapter 2, Eq. lcos).
+
+    Args:
+        capex: Upfront capital expenditure (EUR).
+        annual_costs: [A_1, ..., A_n] (EUR), e.g. from annual_cost() per year.
+        energy_outputs: [W_out,1, ..., W_out,n] (kWh) discharged from storage
+            per year. Must be the same length as annual_costs.
+        discount_rate: i, e.g. 0.07 for 7% (ECO-01: indicative 6-8%).
+
+    Returns:
+        LCOS in EUR/kWh.
+
+    Raises:
+        ValueError: If annual_costs and energy_outputs have different
+            lengths, or if the discounted energy denominator is zero.
+    """
+    if len(annual_costs) != len(energy_outputs):
+        raise ValueError("annual_costs and energy_outputs must have the same length")
+
+    discounted_costs = sum(
+        a_t / (1 + discount_rate) ** t for t, a_t in enumerate(annual_costs, start=1)
+    )
+    discounted_energy = sum(
+        w_t / (1 + discount_rate) ** t for t, w_t in enumerate(energy_outputs, start=1)
+    )
+    if discounted_energy == 0:
+        raise ValueError("Discounted energy output is zero - cannot compute LCOS")
+
+    return (capex + discounted_costs) / discounted_energy
+
+
+@dataclass
+class CapexBreakdown:
+    """
+    CAPEX line items for one asset class. All values in EUR.
+
+    The *_per_unit defaults below are assumptions, not Funchal quotes (Section
+    5.2.2 of the thesis lists their status):
+      - bess_eur_per_kwh: installed battery price, no published source; the
+        results are robust to it (the battery does not repay at much lower prices).
+      - pv_eur_per_wp: 1.0 EUR/Wp, the system price of commercial plants of
+        10-100 kWp in Spain in 2023 (IEA PVPS National Survey Report, Spain
+        2023; 0.8 EUR/Wp for 100-250 kWp). Madeira may be dearer.
+      - evse_eur_per_unit: charger price, US commercial DC fast charger
+        (non-marine); chargers are treated as already installed by default.
+    Replace them with supplier quotes when available.
+    """
+
+    bess_kwh: float = 0.0
+    bess_eur_per_kwh: float = 650.0       # assumption; replace with a supplier quote
+    # Battery POWER. The EUR/kWh price above covers a battery that can charge or
+    # discharge in 4 hours (0.25 kW per kWh, bess_ref_kw_per_kwh). Power above
+    # that reference costs bess_eur_per_extra_kw more (inverter / power
+    # conversion). bess_kw = 0 means "not specified": no extra cost.
+    # 100 EUR/kW is an ESTIMATE for a commercial-size inverter (typical
+    # range 80-150 EUR/kW), not a quote. It is conservative: European C&I
+    # packages are commonly sold at 0.4-0.5 kW per kWh within their EUR/kWh
+    # price. Replace with the supplier quote.
+    bess_kw: float = 0.0
+    bess_ref_kw_per_kwh: float = 0.25
+    bess_eur_per_extra_kw: float = 100.0
+    pv_wp: float = 0.0
+    pv_eur_per_wp: float = 1.0            # Spain, commercial 10-100 kWp, 2023; replace with a quote
+    evse_units: int = 0
+    evse_eur_per_unit: float = 26000.0    # assumption; replace with a quote
+
+    def bess_extra_power_eur(self) -> float:
+        """Cost (EUR) of battery power above the reference included in the EUR/kWh price."""
+        if self.bess_kwh <= 0 or self.bess_kw <= 0:
+            return 0.0
+        extra_kw = max(0.0, self.bess_kw - self.bess_ref_kw_per_kwh * self.bess_kwh)
+        return extra_kw * self.bess_eur_per_extra_kw
+
+    def total(self) -> float:
+        """Sum of PV + BESS (+ extra battery power) + EVSE CAPEX (EUR)."""
+        return (
+            self.bess_kwh * self.bess_eur_per_kwh
+            + self.bess_extra_power_eur()
+            + self.pv_wp * self.pv_eur_per_wp
+            + self.evse_units * self.evse_eur_per_unit
+        )
+
+
+@dataclass
+class OpexBreakdown:
+    """
+    OPEX line items for one asset class, per year. All values in EUR/year.
+
+    The *_rate defaults are assumptions, not Funchal-specific values:
+      - bess_rate_of_capex: about 2-2.5 % of the battery CAPEX per year
+      - pv_eur_per_wp_year: 0.015 EUR/Wp/year (15 EUR/kWp/year), within the
+        8-30 EUR/kW a year quoted for commercial plants
+      - evse_eur_per_unit_year: about 400 USD per charger per year (US DOE)
+    """
+
+    bess_capex: float = 0.0
+    bess_rate_of_capex: float = 0.0225   # assumption
+    pv_wp: float = 0.0
+    pv_eur_per_wp_year: float = 0.015    # assumption (15 EUR/kWp/year, in EUR/Wp/year)
+    evse_units: int = 0
+    evse_eur_per_unit_year: float = 370.0  # assumption
+
+    def total(self) -> float:
+        """Sum of PV + BESS + EVSE OPEX for one year (EUR)."""
+        return (
+            self.bess_capex * self.bess_rate_of_capex
+            + self.pv_wp * self.pv_eur_per_wp_year
+            + self.evse_units * self.evse_eur_per_unit_year
+        )
