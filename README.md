@@ -1,15 +1,16 @@
 # Marina Electrification Planner
 
-Techno-economic extension of **PyPort Sim** for the electrification of recreational marinas, with a case study of the Funchal marina (Madeira).
+Techno-economic extension (plugin) of **[PyPort Sim](https://github.com/AHEAD-EU/pyport_sim)** for the electrification of recreational marinas, with a case study of the Funchal marina (Madeira).
 
-This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026, MIT license), developed for the master's thesis *A Techno-Economic Analysis of the Electrification of Recreational Marinas: A Simulation-Based Approach with a Case Study in Funchal* (University of Bologna, Digital Transformation Management; research mobility at ITI/LARSyS, Funchal). It turns the engineering simulator into a planning tool: it adds an economic layer (CAPEX and OPEX, grid power charges, battery degradation, NPV and payback) and a dashboard in which a non-technical user chooses a simulated case, changes prices and assumptions and reads the financial result. The original PyPort README is kept in [`docs/PYPORT_README.md`](docs/PYPORT_README.md).
+PyPort Sim (T. Garcês, University of Madeira, 2026, MIT license) is included as a git submodule in `external/pyport_sim`, at a version that adds a few backward-compatible extension points (rule-based battery, price of exported energy, any number of trip slots, hooks for the trip pattern); this repository adds the economic layer, the planner dashboard and the experiments of the master's thesis *A Techno-Economic Analysis of the Electrification of Recreational Marinas: A Simulation-Based Approach with a Case Study in Funchal* (University of Bologna, Digital Transformation Management; research mobility at ITI/LARSyS, Funchal). It turns the engineering simulator into a planning tool: it adds an economic layer (CAPEX and OPEX, grid power charges, battery degradation, NPV and payback) and a dashboard in which a non-technical user chooses a simulated case, changes prices and assumptions and reads the financial result. The documentation of the simulator itself is in the PyPort Sim repository.
 
 ## What was added to PyPort
 
 | Part | Where | What it does |
 |---|---|---|
 | Economic layer | `economics/` | CAPEX/OPEX, levelized cost of storage, battery degradation and replacements, EEM 2026 tariff handling, NPV, simple and discounted payback. Tested in `tests/economics/`. |
-| Simulator changes | `simulation/`, `forecasting/` | Forecaster charging-window correction, number of daily trip slots from the configuration, EEM tariff files, price of exported energy, plant without smart charging (charging on arrival and a rule-based battery), measurement of the power in the peak hours. The validated asset models are unchanged. |
+| Funchal case study | `marina_planner/` | The usage pattern of the boats (trips per day from the season and the public holidays) as a subclass of PyPort's `TripManager`, and the engine that uses it. The extension points it relies on (rule-based battery, price of exported energy, any number of trip slots) are generic changes of PyPort Sim. |
+| Tariffs | `assets/tariff/`, `make_eem_tariffs.py` | EEM 2026 tariff files, one per simulated week, and the sensitivity tariffs. |
 | Experiments | `boats_scaling_experiment.py`, `garmin_scaling_experiment.py`, `scripts/` | Run a case for four representative weeks and write one CSV row. The scripts run whole series of cases. |
 | Dashboard | `dashboard/` | Static page (`index.html`) with its data files (`cases.js`, `plain.js`, `peakhour.js`): 180 simulated cases. |
 | Results | `results_summary/` | Summary CSVs of every series used in the thesis. |
@@ -18,18 +19,26 @@ This repository is a fork of PyPort Sim (T. Garcês, University of Madeira, 2026
 
 Python 3.11 or later; the optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
 
+```bash
+git clone --recurse-submodules <url of this repository>
+cd marina-electrification-planner
+git submodule update --init       # if the clone was made without --recurse-submodules
+```
+
+To use another copy of PyPort Sim, set the environment variable `PYPORT_PATH` to its folder.
+
 Requirements to reproduce the results: Python 3.11 or later (3.12 tested), internet access (simulations with PV download the weather of the simulated days from Open-Meteo; without it the run stops with an error), and Windows PowerShell for the scripts in `scripts/`. The tests and the dashboard need neither.
 
 ```bash
 python -m venv venv
 venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-pytest tests/economics           # tests of the economic layer
+pytest                            # tests of the economic layer and of the Funchal case study
 ```
 
 **Dashboard.** Open `dashboard/index.html` in a browser: it needs no server. *Findings* summarizes the simulated cases, *Calculator* gives the detail of one case with editable prices, *Next steps* lists what is still open.
 
-**One simulation.** `python main.py` runs the PyPort example; `streamlit run streamlit_app.py` shows the time series of a run.
+**One simulation.** The PyPort example is in `external/pyport_sim/main.py`.
 
 **One case of the thesis.**
 
@@ -69,9 +78,10 @@ economics/               economic layer (CAPEX/OPEX, degradation, tariffs, payba
 dashboard/               planner: index.html and data files
 scripts/                 PowerShell scripts that run series of simulations
 results_summary/         summary CSVs of the series (logs and databases are not kept)
-tests/                   tests (economics/ is new; the rest comes from PyPort)
-models/ simulation/ optimization/ forecasting/ database/ weather/ config/ assets/
-                         PyPort Sim packages and input data
+marina_planner/           Funchal case study (trip pattern and engine, as extensions of PyPort Sim)
+tests/                   tests of the economic layer and of the Funchal case study
+external/pyport_sim/      PyPort Sim (git submodule)
+assets/                  trips of the case study and EEM tariff files
 boats_scaling_experiment.py, garmin_scaling_experiment.py, summarize_runs.py
                          experiment drivers
 make_eem_tariffs.py, make_tariffs.py
@@ -82,4 +92,4 @@ build_dashboard_cases.py, export_*.py
 
 ## License
 
-MIT, as the original PyPort Sim (see `LICENSE`).
+MIT (see `LICENSE`), as PyPort Sim.

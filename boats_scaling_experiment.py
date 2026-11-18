@@ -107,10 +107,11 @@ import re
 import sys
 from pathlib import Path
 
+import _pyport  # noqa: F401  (makes the PyPort Sim packages importable)
+from marina_planner.funchal import FUNCHAL_TRIP_SCHEDULE, FunchalEngine as SimulationEngine
 from models import Port, Boat, Charger, PV, BESS, BESSControlStrategy
 from config import Settings, SimulationMode
 from database import DatabaseManager
-from simulation import SimulationEngine
 from economics.run_economics import grid_cost_split, grid_peak_kw, grid_export_kwh, grid_peak_hour_kw, mv_power_cost_year
 
 PEAKHOUR = {}   # average import power in the peak hours of the last run of each scenario tag, kW
@@ -336,6 +337,7 @@ def run_scenario(num_boats: int, with_der: bool, contracted_power: float,
         db_path=db_path,
         use_optimizer=use_optimizer,
         power_limit_mode=True,
+        trip_schedule=FUNCHAL_TRIP_SCHEDULE,
         bess_rule_based=bool(with_der and PLAIN_DER),
     )
     if os.path.exists(db_path):

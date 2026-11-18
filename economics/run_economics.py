@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import _pyport  # noqa: F401  (makes the PyPort Sim packages importable)
 from database import DatabaseManager
 
 from .metrics import register_economic_metrics

@@ -29,7 +29,8 @@ import sys
 from pathlib import Path
 
 import boats_scaling_experiment as b
-from simulation import SimulationEngine
+
+SimulationEngine = b.SimulationEngine
 
 GARMIN_TRIPS_DIR = "assets/trips_garmin"
 

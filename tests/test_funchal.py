@@ -1,5 +1,5 @@
 """
-TripManager seasonal/holiday trip-count logic.
+Funchal trip-count logic (season and public holidays).
 
 Replaces the previous weekday-based rule (2 trips Mon-Fri, 1 Saturday, 0
 Sunday - a commercial-fleet pattern, backwards for a recreational marina)
@@ -10,7 +10,7 @@ TRIPS_LOW_SEASON otherwise. No day of the week is ever zeroed out.
 
 from datetime import date, datetime
 
-from simulation.trip_manager import TripManager
+from marina_planner.funchal import FunchalTripManager as TripManager
 
 
 def test_num_trips_high_season_weekday():
