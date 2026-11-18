@@ -17,24 +17,35 @@ PyPort Sim (T. Garcês, University of Madeira, 2026, MIT license) is included as
 
 ## Quick start
 
-Python 3.11 or later; the optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
+Python 3.11 or later (3.12 tested). The optimizer needs the SCIP solver (PySCIPOpt is in `requirements.txt`).
 
 ```bash
 git clone --recurse-submodules <url of this repository>
-cd marina-electrification-planner
-git submodule update --init       # if the clone was made without --recurse-submodules
-```
-
-To use another copy of PyPort Sim, set the environment variable `PYPORT_PATH` to its folder.
-
-Requirements to reproduce the results: Python 3.11 or later (3.12 tested), internet access (simulations with PV download the weather of the simulated days from Open-Meteo; without it the run stops with an error), and Windows PowerShell for the scripts in `scripts/`. The tests and the dashboard need neither.
-
-```bash
+cd <folder of the repository>
 python -m venv venv
 venv\Scripts\activate            # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
-pytest                            # tests of the economic layer and of the Funchal case study
+pytest                            # 72 tests of the economic layer and of the Funchal case study
 ```
+
+If the clone was made without `--recurse-submodules`, the folder `external/pyport_sim` is empty: run `git submodule update --init`. To use another copy of PyPort Sim, set the environment variable `PYPORT_PATH` to its folder.
+
+What each part needs:
+
+| To do | You need |
+|---|---|
+| Open the dashboard | A browser. Nothing else: no installation, no PyPort Sim. |
+| Run the tests | The steps above. No internet. |
+| Run a simulation | The steps above, and internet access: simulations with PV download the weather of the simulated days from Open-Meteo, and without it the run stops with an error. |
+| Run whole series of simulations | The same, and Windows PowerShell for the scripts in `scripts/`. |
+
+**Check the installation.** This runs one week of the case study (four boats, 100 kWp of PV, a 200 kWh / 50 kW battery, grid connection limited to 100 kW) and takes a few minutes:
+
+```bash
+python garmin_scaling_experiment.py --boat-counts 4 --pv-kwp 100 --bess-kwh 200 --bess-kw 50 --grid-limit-kw 100 --seed 1 --tariff-json "assets/tariff/eem_mt_{season}.json" --export-price 0.05 --seasons winter --out-csv check_winter.csv
+```
+
+In `check_winter_seasons.csv` the winter row must show `baseline_weekly_eur` 529.97, `scheduled_weekly_eur` 367.86, `der_weekly_eur` 178.25, `der_export_kwh` 742.8 and `weekly_savings_eur` 189.61, the values stored in `results_summary/`.
 
 **Dashboard.** Open `dashboard/index.html` in a browser: it needs no server. *Findings* summarizes the simulated cases, *Calculator* gives the detail of one case with editable prices, *Next steps* lists what is still open.
 
