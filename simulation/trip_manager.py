@@ -57,6 +57,18 @@ class TripManager:
         else:
             print("  Warning: No trips loaded!")
 
+    def _num_trips_for_date(self, current_date: datetime) -> int:
+        """Number of trips for a calendar day (default: 2 on weekdays, 1 on Saturday, 0 on Sunday).
+
+        A subclass can override this method to model a different usage pattern.
+        """
+        weekday = current_date.weekday()
+        if weekday < 5:
+            return 2
+        if weekday == 5:
+            return 1
+        return 0
+
     def assign_daily_trips(self, boat_name: str, current_date: datetime) -> List[Trip]:
         """
         Assign trips for a boat for the given day if not already assigned.
@@ -72,18 +84,12 @@ class TripManager:
             return []
 
         date_str = current_date.strftime("%Y-%m-%d")
-        weekday = current_date.weekday()
 
         if boat_name in self.daily_assignments:
             if date_str in self.daily_assignments[boat_name]:
                 return self.daily_assignments[boat_name][date_str]
 
-        if weekday < 5:
-            num_trips = 2
-        elif weekday == 5:
-            num_trips = 1
-        else:
-            num_trips = 0
+        num_trips = self._num_trips_for_date(current_date)
 
         assigned_trips = []
         if num_trips > 0:

@@ -1,5 +1,6 @@
 """Core simulation engine for the electric port simulator."""
 
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Union
@@ -12,9 +13,15 @@ from optimization import BaseOptimizer
 from simulation.trip_manager import TripManager
 from weather import OpenMeteoClient
 
+# Charging trace printed every 15 minutes of the day (debugging only).
+_TRACE = False
+
 
 class SimulationEngine:
     """Main simulation engine for the electric port."""
+
+    # Class that assigns the daily trips; a subclass can replace it (e.g. a site-specific usage pattern).
+    trip_manager_class = TripManager
 
     def __init__(
         self,
@@ -67,7 +74,7 @@ class SimulationEngine:
 
         # Initialize trip manager
         print(f"\nLoading trips from {trips_directory}...")
-        self.trip_manager = TripManager(trips_directory)
+        self.trip_manager = self.trip_manager_class(trips_directory)
 
         # Track active trips: {boat_name: (trip, start_datetime, elapsed_seconds)}
         self.active_trips: Dict[str, tuple[Trip, datetime, float]] = {}
@@ -110,8 +117,8 @@ class SimulationEngine:
                 db_manager,
                 settings.timestep,
                 self.boat_charger_assignments,
+                trip_schedule=settings.trip_schedule,
             )
-
             print(
                 f"   Pre-assignments: {', '.join(f'{b} → {self.port.chargers[c].name}' for b, c in self.boat_charger_assignments.items())}"
             )
@@ -632,7 +639,7 @@ class SimulationEngine:
             )
 
         # DEBUG: Print scheduled powers
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             print(
                 f"\n  [DEBUG {ts_str}] Scheduled charger powers: {scheduled_charger_power}"
             )
@@ -650,7 +657,7 @@ class SimulationEngine:
                 boat_to_charger[charger.connected_boat] = charger.name
 
         # DEBUG: Print current assignments
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             currently_charging = [
                 (
                     boat_name,
@@ -670,7 +677,7 @@ class SimulationEngine:
             if boat.soc >= 0.99:
                 charger = next(c for c in self.port.chargers if c.name == charger_name)
 
-                if now.hour < 18 and now.minute % 15 == 0:
+                if _TRACE and now.hour < 18 and now.minute % 15 == 0:
                     print(f"  [DEBUG] Disconnecting {boat_name} - fully charged")
 
                 charger.state = ChargerState.IDLE
@@ -736,7 +743,8 @@ class SimulationEngine:
                 boat.state = BoatState.CHARGING
 
                 if (
-                    now.hour < 18
+                    _TRACE
+                    and now.hour < 18
                     and now.minute % 15 == 0
                     and abs(old_power - new_power) > 0.1
                 ):
@@ -766,20 +774,20 @@ class SimulationEngine:
                         (boat.name, assigned_charger.name, new_power)
                     )
                 else:
-                    if now.hour < 18 and now.minute % 15 == 0:
+                    if _TRACE and now.hour < 18 and now.minute % 15 == 0:
                         print(
                             f"  [DEBUG] WARNING: No pre-assignment for {boat.name} (needs {scheduled_power:.1f} kW)"
                         )
 
         # DEBUG: Print releases and new assignments
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             if releases_made:
                 print(f"  [DEBUG] Released: {releases_made}")
             if assignments_made:
                 print(f"  [DEBUG] New assignments: {assignments_made}")
 
         # DEBUG: Print final state
-        if now.hour < 18 and now.minute % 15 == 0:
+        if _TRACE and now.hour < 18 and now.minute % 15 == 0:
             total_power = sum(
                 c.power for c in self.port.chargers if c.state == ChargerState.CHARGING
             )
@@ -930,8 +938,16 @@ class SimulationEngine:
         # Calculate available power (contracted power - current usage)
         current_power_used = self._get_current_power_usage()
         pv_production = sum(pv.current_production for pv in self.port.pv_systems)
+        bess_extra = (
+            sum(
+                b.get_max_discharge_power_available(self.settings.timestep)
+                for b in self.port.bess_systems
+            )
+            if self._rule_based_active()
+            else 0.0
+        )
         available_power = (
-            self.port.contracted_power + pv_production - current_power_used
+            self.port.contracted_power + pv_production + bess_extra - current_power_used
         )
 
         # Assign boats to chargers (FCFS with power limit enforcement)
@@ -978,7 +994,7 @@ class SimulationEngine:
         # If power limit is hit, proportionally reduce charging power for already-charging boats
         # This ensures we don't exceed the limit
         total_power_used = self._get_current_power_usage()
-        max_total_power = self.port.contracted_power + pv_production
+        max_total_power = self.port.contracted_power + pv_production + bess_extra
 
         if (
             total_power_used > max_total_power + 0.1
@@ -1033,11 +1049,23 @@ class SimulationEngine:
         fetch_days = min(days if days else self.days, 7)  # Cap at 7 days
 
         print("  Fetching weather forecast from Open-Meteo...")
-        forecast_data = self.weather_client.fetch_forecast(fetch_start, fetch_days)
+        forecast_data = None
+        for attempt in range(3):
+            forecast_data = self.weather_client.fetch_forecast(fetch_start, fetch_days)
+            if forecast_data and "timestamps" in forecast_data:
+                break
+            time.sleep(2 * (attempt + 1))
 
         if not forecast_data or "timestamps" not in forecast_data:
-            print("  ⚠️  Failed to fetch weather forecast")
-            return
+            msg = (
+                "Could not download the weather data from Open-Meteo (internet access "
+                "is required for simulations with PV). Without it the PV production "
+                "would be zero and the results wrong."
+            )
+            if os.environ.get("PYPORT_ALLOW_NO_WEATHER") == "1":
+                print(f"  WARNING: {msg} Continuing because PYPORT_ALLOW_NO_WEATHER=1.")
+                return
+            raise RuntimeError(msg)
 
         timestamps = forecast_data["timestamps"]
         print(f"  ✓ Received {len(timestamps)} hours of forecast data")
@@ -1129,6 +1157,8 @@ class SimulationEngine:
         # Check if we're using optimizer schedules
         if self.use_optimizer:
             self._update_bess_with_schedule()
+        elif self._rule_based_active():
+            self._update_bess_rule_based()
         else:
             self._update_bess_default()
 
@@ -1200,6 +1230,62 @@ class SimulationEngine:
                     bess.idle()
         # Note: Any remaining excess_pv after BESS charging will be tracked as
         # power_active_export in _save_measurements()
+
+    def _rule_based_active(self) -> bool:
+        return (
+            not self.use_optimizer
+            and getattr(self.settings, "bess_rule_based", False)
+            and bool(self.port.bess_systems)
+        )
+
+    def _cheapest_price_today(self) -> float:
+        """Lowest tariff price of the current day (cached per date)."""
+        day = self.current_datetime.date()
+        cache = getattr(self, "_cheapest_cache", None)
+        if cache is None or cache[0] != day:
+            base = self.current_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+            prices = [
+                self.port.get_tariff_price(base + timedelta(minutes=15 * k))
+                for k in range(96)
+            ]
+            cache = (day, min(prices))
+            self._cheapest_cache = cache
+        return cache[1]
+
+    def _update_bess_rule_based(self):
+        """Battery rules without optimizer or forecast."""
+        step = self.settings.timestep
+        pv = sum(p.current_production for p in self.port.pv_systems)
+        load = sum(
+            c.power for c in self.port.chargers if c.state == ChargerState.CHARGING
+        )
+        grid_limit = self.port.contracted_power
+        price = self.port.get_tariff_price(self.current_datetime)
+        cheap = price <= self._cheapest_price_today() + 1e-9
+        for bess in self.port.bess_systems:
+            net = load - pv  # what the grid would have to supply
+            if net > 0.1 and (net > grid_limit or not cheap):
+                want = net if not cheap else net - grid_limit
+                power = min(want, bess.get_max_discharge_power_available(step))
+                if power > 0.1:
+                    bess.discharge(power, step)
+                    continue
+                bess.idle()
+            elif pv > load + 0.1:
+                power = min(pv - load, bess.get_max_charge_power_available(step))
+                if power > 0.1:
+                    bess.charge(power, step)
+                else:
+                    bess.idle()
+            elif cheap and load <= 0.1:
+                head = grid_limit - max(net, 0.0)
+                power = min(head, bess.get_max_charge_power_available(step))
+                if power > 0.1:
+                    bess.charge(power, step)
+                else:
+                    bess.idle()
+            else:
+                bess.idle()
 
     def _update_bess_default(self):
         """
